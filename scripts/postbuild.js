@@ -5,8 +5,6 @@
  * - Adds Google Translate suppression meta tags
  * - Adds cache-control meta tags
  * - Adds service worker cleanup script
- * - Adds loading indicator visible before React mounts
- * - Adds global error handler for uncaught errors
  * - Sets Japanese noscript text
  * - Copies dist/ to docs/ for GitHub Pages
  *
@@ -62,35 +60,17 @@ const swScript = `
 
 html = html.replace('<style id="expo-reset">', swScript + '\n    <style id="expo-reset">');
 
-// 5. Add loading indicator inside <div id="root"> so it shows before React mounts
-html = html.replace(
-  '<div id="root"></div>',
-  '<div id="root"><div id="loading" style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F5F5F5"><div style="text-align:center"><p style="font-size:18px;color:#333;margin:0 0 8px">AI &#x30B9;&#x30B1;&#x30B8;&#x30E5;&#x30FC;&#x30E9;&#x30FC;</p><p style="font-size:14px;color:#999;margin:0">&#x8AAD;&#x307F;&#x8FBC;&#x307F;&#x4E2D;...</p></div></div></div>'
-);
-
-// 6. Add global error handler to catch uncaught JS errors and display them
-const errorHandler = `
-    <script>
-      window.onerror = function(msg, src, line, col, err) {
-        var root = document.getElementById('root');
-        if (root) {
-          root.innerHTML = '<div style="padding:20px;font-family:sans-serif;color:#D32F2F"><h2>\\u30A8\\u30E9\\u30FC\\u304C\\u767A\\u751F\\u3057\\u307E\\u3057\\u305F</h2><pre style="white-space:pre-wrap;font-size:12px;color:#333;background:#f5f5f5;padding:12px;border-radius:8px">' + msg + '\\n' + (src||'') + ':' + (line||'') + '</pre></div>';
-        }
-      };
-    </script>`;
-html = html.replace('</head>', errorHandler + '\n  </head>');
-
-// 7. Fix noscript text
+// 5. Fix noscript text
 html = html.replace(
   /You need to enable JavaScript to run this app\./,
   'JavaScriptを有効にしてください。'
 );
 
-// 8. Convert absolute paths to relative for GitHub Pages subdir deployment
+// 6. Convert absolute paths to relative for GitHub Pages subdir deployment
 html = html.replace(/src="\//g, 'src="./');
 html = html.replace(/href="\//g, 'href="./');
 
-// 9. Clean up comments
+// 7. Clean up comments
 html = html.replace(/\s*<!-- The `react-native-web`.*?-->/s, '');
 html = html.replace(/\s*<!-- Use static rendering.*?-->/s, '');
 html = html.replace(/\s*<!-- The root element.*?-->/s, '');
@@ -99,7 +79,7 @@ html = html.replace(/\s*\/\* These styles.*?\*\//g, '');
 fs.writeFileSync(HTML_PATH, html);
 console.log('dist/index.html patched successfully.');
 
-// 10. Copy dist/ to docs/ for GitHub Pages
+// 8. Copy dist/ to docs/ for GitHub Pages
 function copyDirSync(src, dest) {
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
