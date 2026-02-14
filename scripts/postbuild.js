@@ -61,7 +61,11 @@ html = html.replace(
   'JavaScriptを有効にしてください。'
 );
 
-// 5. Clean up comments
+// 5. Convert absolute paths to relative for GitHub Pages subdir deployment
+html = html.replace(/src="\//g, 'src="./');
+html = html.replace(/href="\//g, 'href="./');
+
+// 6. Clean up comments
 html = html.replace(/\s*<!-- The `react-native-web`.*?-->/s, '');
 html = html.replace(/\s*<!-- Use static rendering.*?-->/s, '');
 html = html.replace(/\s*<!-- The root element.*?-->/s, '');
