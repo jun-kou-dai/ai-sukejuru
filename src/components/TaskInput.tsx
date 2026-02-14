@@ -1,52 +1,92 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { analyzeTask, TaskAnalysis } from '../services/aiService';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { analyzeTask } from '../services/aiService';
 import { scheduleTask } from '../services/scheduler';
 import { useCalendar } from '../contexts/CalendarContext';
 import { useTasks, TaskItem } from '../contexts/TaskContext';
 import { formatTime, formatDate } from '../utils/timezone';
 
+const SpeechRecognition = typeof window !== 'undefined'
+  ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  : null;
+
 export default function TaskInput() {
-  const [input, setInput] = useState('');
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
   const [busy, setBusy] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const { events, addEvent, refreshEvents } = useCalendar();
   const { tasks, addTask, updateTask } = useTasks();
 
-  const handleSubmit = async () => {
-    const text = input.trim();
-    if (!text || busy) return;
+  const startListening = () => {
+    if (!SpeechRecognition) {
+      alert('このブラウザは音声入力に対応していません。Chrome を使ってください。');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onresult = (event: any) => {
+      const result = event.results[event.results.length - 1];
+      setTranscript(result[0].transcript);
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+    };
+
+    recognition.onerror = () => {
+      setListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setListening(true);
+    setTranscript('');
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setListening(false);
+  };
+
+  const handleSubmit = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || busy) return;
 
     const taskId = Date.now().toString();
     const task: TaskItem = {
       id: taskId,
-      input: text,
+      input: trimmed,
       analysis: null,
       status: 'analyzing',
     };
 
     addTask(task);
-    setInput('');
+    setTranscript('');
     setBusy(true);
 
     try {
-      // Step 1: AI analysis
-      const analysis = await analyzeTask(text);
+      const analysis = await analyzeTask(trimmed);
       updateTask(taskId, { analysis, status: 'analyzed' });
 
-      // Step 2: Find slot
       updateTask(taskId, { status: 'scheduling' });
       const result = scheduleTask(analysis, events);
 
       if (!result.slotFound) {
         updateTask(taskId, {
           status: 'error',
-          error: '空き時間が見つかりませんでした。手動でスケジュールしてください。',
+          error: '空き時間が見つかりませんでした。',
         });
         setBusy(false);
         return;
       }
 
-      // Step 3: Create calendar event
       const calEvent = await addEvent(analysis.title, result.start, result.end);
       updateTask(taskId, {
         status: 'scheduled',
@@ -55,7 +95,6 @@ export default function TaskInput() {
         scheduledEnd: result.end,
       });
 
-      // Refresh events
       await refreshEvents();
     } catch (e: any) {
       updateTask(taskId, {
@@ -67,12 +106,19 @@ export default function TaskInput() {
     }
   };
 
-  // Get unscheduled (pending/error) tasks
+  const handleMicPress = () => {
+    if (busy) return;
+    if (listening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
   const unscheduledTasks = tasks.filter(t => t.status === 'error');
 
   return (
     <View style={styles.container}>
-      {/* Unplaced tasks notification */}
       {unscheduledTasks.length > 0 && (
         <View style={styles.unplacedBanner}>
           <Text style={styles.unplacedText}>
@@ -81,7 +127,6 @@ export default function TaskInput() {
         </View>
       )}
 
-      {/* Recent task status */}
       {tasks.slice(-3).reverse().map(task => (
         <View key={task.id} style={styles.taskStatus}>
           {task.status === 'analyzing' && (
@@ -113,28 +158,46 @@ export default function TaskInput() {
         </View>
       ))}
 
-      {/* Input area */}
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="タスクを入力... 例: 9時からトレーニング"
-          placeholderTextColor="#999"
-          onSubmitEditing={handleSubmit}
-          editable={!busy}
-        />
+      {/* Voice input area */}
+      <View style={styles.voiceArea}>
+        {transcript ? (
+          <View style={styles.transcriptArea}>
+            <Text style={styles.transcriptText}>{transcript}</Text>
+            {!listening && (
+              <TouchableOpacity
+                style={styles.sendBtn}
+                onPress={() => handleSubmit(transcript)}
+                disabled={busy}
+              >
+                <Text style={styles.sendBtnText}>追加</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <Text style={styles.hintText}>
+            {listening ? '話してください...' : 'マイクを押して話しかけてください'}
+          </Text>
+        )}
+
         <TouchableOpacity
-          style={[styles.submitBtn, busy && styles.submitBtnDisabled]}
-          onPress={handleSubmit}
-          disabled={busy || !input.trim()}
+          style={[
+            styles.micBtn,
+            listening && styles.micBtnActive,
+            busy && styles.micBtnDisabled,
+          ]}
+          onPress={handleMicPress}
+          disabled={busy}
         >
           {busy ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="large" color="#fff" />
           ) : (
-            <Text style={styles.submitBtnText}>追加</Text>
+            <Text style={styles.micIcon}>{listening ? '⏹' : '🎤'}</Text>
           )}
         </TouchableOpacity>
+
+        {listening && (
+          <Text style={styles.listeningText}>聞き取り中...</Text>
+        )}
       </View>
     </View>
   );
@@ -189,35 +252,69 @@ const styles = StyleSheet.create({
     color: '#C62828',
     fontSize: 13,
   },
-  inputRow: {
-    flexDirection: 'row',
+  voiceArea: {
+    alignItems: 'center',
+    paddingTop: 16,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    gap: 8,
   },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#DDD',
+  hintText: {
+    color: '#999',
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  transcriptArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    backgroundColor: '#FAFAFA',
+    paddingVertical: 8,
+    marginBottom: 12,
+    width: '100%',
+    gap: 8,
   },
-  submitBtn: {
-    backgroundColor: '#2196F3',
+  transcriptText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  sendBtn: {
+    backgroundColor: '#4CAF50',
     borderRadius: 8,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  submitBtnDisabled: {
-    backgroundColor: '#B0BEC5',
-  },
-  submitBtnText: {
+  sendBtnText: {
     color: '#fff',
     fontSize: 15,
+    fontWeight: '600',
+  },
+  micBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#2196F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  micBtnActive: {
+    backgroundColor: '#F44336',
+  },
+  micBtnDisabled: {
+    backgroundColor: '#B0BEC5',
+  },
+  micIcon: {
+    fontSize: 32,
+  },
+  listeningText: {
+    color: '#F44336',
+    fontSize: 13,
+    marginTop: 8,
     fontWeight: '600',
   },
 });
