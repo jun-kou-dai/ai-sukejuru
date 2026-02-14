@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>AI スケジューラー</title>
     
@@ -36,13 +36,22 @@
         flex: 1;
       }
     </style>
-  <link rel="icon" href="./favicon.ico" /></head>
+  <link rel="icon" href="./favicon.ico" />
+    <script>
+      window.onerror = function(msg, src, line, col, err) {
+        var root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = '<div style="padding:20px;font-family:sans-serif;color:#D32F2F"><h2>\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F</h2><pre style="white-space:pre-wrap;font-size:12px;color:#333;background:#f5f5f5;padding:12px;border-radius:8px">' + msg + '\n' + (src||'') + ':' + (line||'') + '</pre></div>';
+        }
+      };
+    </script>
+  </head>
 
   <body>
     <noscript>
       JavaScriptを有効にしてください。
     </noscript>
-    <div id="root"></div>
-  <script src="./_expo/static/js/web/index-d49fa785affe3ed753beddc342b928d6.js" defer></script>
+    <div id="root"><div id="loading" style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#F5F5F5"><div style="text-align:center"><p style="font-size:18px;color:#333;margin:0 0 8px">AI &#x30B9;&#x30B1;&#x30B8;&#x30E5;&#x30FC;&#x30E9;&#x30FC;</p><p style="font-size:14px;color:#999;margin:0">&#x8AAD;&#x307F;&#x8FBC;&#x307F;&#x4E2D;...</p></div></div></div>
+  <script src="./_expo/static/js/web/index-2438bc3a92943e748601adec4d37ef89.js" defer></script>
 </body>
 </html>
