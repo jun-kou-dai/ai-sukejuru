@@ -1,6 +1,6 @@
 const CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ?? '';
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
-const REDIRECT_URI = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8081';
+const REDIRECT_URI = typeof window !== 'undefined' ? window.location.origin + '/ai-sukejuru' : 'http://localhost:8081';
 
 interface TokenInfo {
   accessToken: string;
