@@ -25,6 +25,9 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "lang": "ja"
+    },
+    "experiments": {
+      "baseUrl": "/ai-sukejuru"
     }
   }
 }
