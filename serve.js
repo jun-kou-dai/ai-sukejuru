@@ -51,10 +51,18 @@ const CACHE_CLEAR_PAGE = `<!DOCTYPE html>
 })();
 </script></body></html>`;
 
+const LOG_FILE = path.join(__dirname, 'access.log');
+fs.writeFileSync(LOG_FILE, ''); // clear log on start
+
 const server = http.createServer((req, res) => {
   const url = req.url || '/';
   const urlPath = url.split('?')[0];
   const query = url.includes('?') ? url.split('?')[1] : '';
+
+  // Log every request with timestamp
+  const logLine = `[${new Date().toISOString()}] ${req.method} ${url} from ${req.headers['user-agent'] || 'unknown'}\n`;
+  fs.appendFileSync(LOG_FILE, logLine);
+  console.log(logLine.trim());
 
   // Serve empty SW to kill any old service worker
   if (urlPath === '/sw.js' || urlPath === '/service-worker.js') {
