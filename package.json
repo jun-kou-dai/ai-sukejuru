@@ -6,7 +6,10 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build": "expo export --platform web && node scripts/postbuild.js",
+    "serve": "node serve.js",
+    "test": "TZ=UTC npx tsx tests/timezone.test.ts && TZ=UTC npx tsx tests/scheduler.test.ts && TZ=UTC npx tsx tests/ui-output.test.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "^6.1.2",
