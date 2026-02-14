@@ -1,3 +1,5 @@
+import { nowJST, formatDateFull, formatTime } from '../utils/timezone';
+
 const API_KEY = process.env.EXPO_PUBLIC_AI_API_KEY ?? '';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
 
@@ -11,20 +13,9 @@ export interface TaskAnalysis {
 }
 
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
-  const now = new Date();
-  const todayStr = now.toLocaleDateString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    weekday: 'long',
-  });
-  const currentTime = now.toLocaleTimeString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  const now = nowJST();
+  const todayStr = formatDateFull(now);
+  const currentTime = formatTime(now);
 
   const prompt = `あなたはタスク分析AIです。ユーザーが入力したタスクを分析し、JSONで返してください。
 
@@ -73,10 +64,15 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   // Extract JSON from response (handle possible markdown code blocks)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('AIからの応答をパースできませんでした');
+    throw new Error(`AIからの応答をパースできませんでした: ${text.substring(0, 200)}`);
   }
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    throw new Error(`AIの応答JSONが不正です: ${jsonMatch[0].substring(0, 200)}`);
+  }
   return {
     title: parsed.title || input,
     durationMinutes: parseInt(parsed.durationMinutes, 10) || 30,

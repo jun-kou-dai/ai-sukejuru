@@ -1,6 +1,6 @@
 import { getAccessToken } from './googleAuth';
 import { CalendarEvent } from '../utils/dateUtils';
-import { TIMEZONE, addDays, startOfDayJST, endOfDayJST, nowJST } from '../utils/timezone';
+import { TIMEZONE, addDays, startOfDayJST, endOfDayJST, nowJST, toISOStringJST } from '../utils/timezone';
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
@@ -46,9 +46,13 @@ function parseEvent(item: any): CalendarEvent {
   let end: Date;
 
   if (isAllDay) {
+    // All-day イベント: Google Calendar は日付のみ返す (例: "2026-02-14")
+    // JSTの 00:00 として扱う。end は翌日の date が返るのが仕様。
     start = new Date(item.start.date + 'T00:00:00+09:00');
     end = new Date(item.end.date + 'T00:00:00+09:00');
   } else {
+    // 通常イベント: dateTime は ISO 8601 でタイムゾーン付き (例: "2026-02-14T09:00:00+09:00")
+    // new Date() は自動的にUTC変換するので正確。
     start = new Date(item.start.dateTime);
     end = new Date(item.end.dateTime);
   }
@@ -72,11 +76,11 @@ export async function createEvent(
     summary,
     description: '[AI-SCHEDULED] このイベントはAIスケジューラーが自動作成しました。',
     start: {
-      dateTime: startTime.toISOString(),
+      dateTime: toISOStringJST(startTime),
       timeZone: TIMEZONE,
     },
     end: {
-      dateTime: endTime.toISOString(),
+      dateTime: toISOStringJST(endTime),
       timeZone: TIMEZONE,
     },
   };
