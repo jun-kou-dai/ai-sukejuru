@@ -23,14 +23,15 @@ export interface TaskAnalysis {
 export function createFallbackAnalysis(input: string): TaskAnalysis {
   const now = nowJST();
 
-  // 時刻パース: 「9時から」「14時45分に」「19時30分から」など
+  // 時刻パース: 「9時から」「14時45分に」「19時50分から」など
   let preferredStartTime: string | null = null;
-  const timeMatch = input.match(/(午後|午前|夕方|夜)?(\d{1,2})時(\d{1,2}分)?/);
-  if (timeMatch) {
-    let hour = parseInt(timeMatch[2], 10);
-    const prefix = timeMatch[1];
-    const minStr = timeMatch[3];
-    const minutes = minStr ? parseInt(minStr.replace('分', ''), 10) : 0;
+  const timeWithMin = input.match(/(午後|午前|夕方|夜)?(\d{1,2})時(\d{1,2})分(?!間)/);
+  const timeHourOnly = !timeWithMin ? input.match(/(午後|午前|夕方|夜)?(\d{1,2})時(?!間)/) : null;
+  const tm = timeWithMin || timeHourOnly;
+  if (tm) {
+    let hour = parseInt(tm[2], 10);
+    const prefix = tm[1];
+    const minutes = timeWithMin ? parseInt(timeWithMin[3], 10) : 0;
     if (prefix === '午後' || prefix === '夕方' || prefix === '夜') {
       if (hour < 12) hour += 12;
     }
@@ -38,21 +39,17 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
     preferredStartTime = `${dateStr}T${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+09:00`;
   }
 
-  // 所要時間パース: 「20分間」「1時間」「90分」など
+  // 所要時間パース: 「15分間」「1時間」「90分」など
+  // 時刻部分（「19時50分」）を除外してからパース
   let durationMinutes = 30;
-  const durHourMatch = input.match(/(\d+)時間/);
-  const durMinMatch = input.match(/(\d+)分(?:間|ほど|くらい)?/);
+  const inputWithoutTime = timeWithMin ? input.replace(timeWithMin[0], '') : input;
+  const durHourMatch = inputWithoutTime.match(/(\d+)時間/);
+  const durMinMatch = inputWithoutTime.match(/(\d+)分/);
   if (durHourMatch) {
     durationMinutes = parseInt(durHourMatch[1], 10) * 60;
     if (durMinMatch) durationMinutes += parseInt(durMinMatch[1], 10);
   } else if (durMinMatch) {
-    // 「X時Y分」の「Y分」と区別: 直前に「時」がなければ所要時間
-    const fullMatch = input.match(/\d+時\d+分/);
-    if (fullMatch && fullMatch[0].includes(durMinMatch[0])) {
-      // 「19時45分」の「45分」は時刻の一部なので所要時間にしない
-    } else {
-      durationMinutes = parseInt(durMinMatch[1], 10);
-    }
+    durationMinutes = parseInt(durMinMatch[1], 10);
   }
 
   // 簡易カテゴリ推定
