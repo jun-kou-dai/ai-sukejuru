@@ -15,6 +15,7 @@ export default function TaskInput() {
   const [transcript, setTranscript] = useState('');
   const [busy, setBusy] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const listeningRef = useRef(false);
   const { events, addEvent, refreshEvents } = useCalendar();
   const { tasks, addTask, updateTask } = useTasks();
 
@@ -27,15 +28,35 @@ export default function TaskInput() {
     const recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = true;
 
     recognition.onresult = (event: any) => {
-      const result = event.results[event.results.length - 1];
-      setTranscript(result[0].transcript);
+      let final = '';
+      let interim = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const r = event.results[i];
+        if (r.isFinal) {
+          final += r[0].transcript;
+        } else {
+          interim += r[0].transcript;
+        }
+      }
+      setTranscript(final + interim);
     };
 
     recognition.onend = () => {
-      setListening(false);
+      // continuous モードでもブラウザが勝手に止める場合がある
+      // listening 中なら自動で再開する（ref を使って最新の状態を参照）
+      if (recognitionRef.current && listeningRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (_) {
+          listeningRef.current = false;
+          setListening(false);
+        }
+      } else {
+        setListening(false);
+      }
     };
 
     recognition.onerror = () => {
@@ -44,13 +65,16 @@ export default function TaskInput() {
 
     recognitionRef.current = recognition;
     recognition.start();
+    listeningRef.current = true;
     setListening(true);
     setTranscript('');
   };
 
   const stopListening = () => {
+    listeningRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
     setListening(false);
   };
