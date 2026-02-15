@@ -1,7 +1,12 @@
 import { nowJST, formatDateFull, formatTime } from '../utils/timezone';
 
-const API_KEY = process.env.EXPO_PUBLIC_AI_API_KEY ?? '';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+/** ビルド時の定数展開による dead-code elimination を防ぐため、実行時に取得する */
+function getGeminiUrl(): string {
+  const key = process.env.EXPO_PUBLIC_AI_API_KEY ?? '';
+  return `${GEMINI_BASE}?key=${key}`;
+}
 
 export interface TaskAnalysis {
   title: string;
@@ -13,10 +18,6 @@ export interface TaskAnalysis {
 }
 
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
-  if (!API_KEY) {
-    throw new Error('この入力はできません');
-  }
-
   const now = nowJST();
   const todayStr = formatDateFull(now);
   const currentTime = formatTime(now);
@@ -54,7 +55,7 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
   let res: Response;
   try {
-    res = await fetch(GEMINI_URL, {
+    res = await fetch(getGeminiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
