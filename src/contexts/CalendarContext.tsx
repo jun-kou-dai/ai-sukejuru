@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { CalendarEvent } from '../utils/dateUtils';
-import { fetchEvents, createEvent, deleteEvent } from '../services/googleCalendar';
+import { fetchEvents, createEvent, deleteEvent, updateEvent } from '../services/googleCalendar';
 
 interface CalendarContextType {
   events: CalendarEvent[];
@@ -8,6 +8,7 @@ interface CalendarContextType {
   error: string | null;
   refreshEvents: () => Promise<void>;
   addEvent: (summary: string, start: Date, end: Date) => Promise<CalendarEvent>;
+  editEvent: (eventId: string, summary: string, start: Date, end: Date) => Promise<CalendarEvent>;
   removeEvent: (eventId: string) => Promise<void>;
 }
 
@@ -17,6 +18,7 @@ const CalendarContext = createContext<CalendarContextType>({
   error: null,
   refreshEvents: async () => {},
   addEvent: async () => { throw new Error('Not initialized'); },
+  editEvent: async () => { throw new Error('Not initialized'); },
   removeEvent: async () => {},
 });
 
@@ -44,13 +46,21 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     return newEvent;
   }, []);
 
+  const editEvent = useCallback(async (eventId: string, summary: string, start: Date, end: Date) => {
+    const updated = await updateEvent(eventId, summary, start, end);
+    setEvents(prev =>
+      prev.map(e => e.id === eventId ? updated : e).sort((a, b) => a.start.getTime() - b.start.getTime())
+    );
+    return updated;
+  }, []);
+
   const removeEvent = useCallback(async (eventId: string) => {
     await deleteEvent(eventId);
     setEvents(prev => prev.filter(e => e.id !== eventId));
   }, []);
 
   return (
-    <CalendarContext.Provider value={{ events, loading, error, refreshEvents, addEvent, removeEvent }}>
+    <CalendarContext.Provider value={{ events, loading, error, refreshEvents, addEvent, editEvent, removeEvent }}>
       {children}
     </CalendarContext.Provider>
   );

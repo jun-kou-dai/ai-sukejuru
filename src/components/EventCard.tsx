@@ -5,55 +5,69 @@ import { formatTime } from '../utils/timezone';
 
 interface Props {
   event: CalendarEvent;
+  onEdit?: (event: CalendarEvent) => void;
   onDelete?: (eventId: string) => void;
 }
 
-export default function EventCard({ event, onDelete }: Props) {
+export default function EventCard({ event, onEdit, onDelete }: Props) {
   const status = getEventStatus(event);
 
   return (
-    <View style={[styles.card, statusStyles[status]]}>
-      <View style={styles.timeColumn}>
-        {event.isAllDay ? (
-          <Text style={[styles.timeText, status === 'past' && styles.pastText]}>終日</Text>
-        ) : (
-          <>
-            <Text style={[styles.timeText, status === 'past' && styles.pastText]}>
-              {formatTime(event.start)}
-            </Text>
-            <Text style={[styles.timeSeparator, status === 'past' && styles.pastText]}>↓</Text>
-            <Text style={[styles.timeText, status === 'past' && styles.pastText]}>
-              {formatTime(event.end)}
-            </Text>
-          </>
-        )}
-      </View>
-      <View style={styles.contentColumn}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, status === 'past' && styles.pastText]} numberOfLines={2}>
-            {event.summary}
-          </Text>
-          {status === 'past' && (
-            <View style={styles.badgePast}>
-              <Text style={styles.badgeText}>済</Text>
-            </View>
-          )}
-          {status === 'current' && (
-            <View style={styles.badgeCurrent}>
-              <Text style={styles.badgeTextCurrent}>進行中</Text>
-            </View>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => onEdit?.(event)}
+      disabled={!onEdit}
+    >
+      <View style={[styles.card, statusStyles[status]]}>
+        <View style={styles.timeColumn}>
+          {event.isAllDay ? (
+            <Text style={[styles.timeText, status === 'past' && styles.pastText]}>終日</Text>
+          ) : (
+            <>
+              <Text style={[styles.timeText, status === 'past' && styles.pastText]}>
+                {formatTime(event.start)}
+              </Text>
+              <Text style={[styles.timeSeparator, status === 'past' && styles.pastText]}>↓</Text>
+              <Text style={[styles.timeText, status === 'past' && styles.pastText]}>
+                {formatTime(event.end)}
+              </Text>
+            </>
           )}
         </View>
-        {event.isAIScheduled && (
-          <Text style={styles.aiLabel}>AI配置</Text>
-        )}
+        <View style={styles.contentColumn}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, status === 'past' && styles.pastText]} numberOfLines={2}>
+              {event.summary}
+            </Text>
+            {status === 'past' && (
+              <View style={styles.badgePast}>
+                <Text style={styles.badgeText}>済</Text>
+              </View>
+            )}
+            {status === 'current' && (
+              <View style={styles.badgeCurrent}>
+                <Text style={styles.badgeTextCurrent}>進行中</Text>
+              </View>
+            )}
+          </View>
+          {event.isAIScheduled && (
+            <Text style={styles.aiLabel}>AI配置</Text>
+          )}
+        </View>
+        <View style={styles.actions}>
+          {onEdit && (
+            <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(event)}>
+              <Text style={styles.editBtnText}>✎</Text>
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(event.id)}>
+              <Text style={styles.deleteBtnText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      {event.isAIScheduled && onDelete && (
-        <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(event.id)}>
-          <Text style={styles.deleteBtnText}>✕</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -148,9 +162,22 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     marginTop: 4,
   },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  editBtn: {
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  editBtnText: {
+    fontSize: 16,
+    color: '#2196F3',
+  },
   deleteBtn: {
     justifyContent: 'center',
-    paddingLeft: 8,
+    paddingHorizontal: 4,
   },
   deleteBtnText: {
     fontSize: 16,

@@ -98,6 +98,37 @@ export async function createEvent(
   return parseEvent(await res.json());
 }
 
+export async function updateEvent(
+  eventId: string,
+  summary: string,
+  startTime: Date,
+  endTime: Date
+): Promise<CalendarEvent> {
+  const body = {
+    summary,
+    start: {
+      dateTime: toISOStringJST(startTime),
+      timeZone: TIMEZONE,
+    },
+    end: {
+      dateTime: toISOStringJST(endTime),
+      timeZone: TIMEZONE,
+    },
+  };
+
+  const res = await fetchWithAuth(
+    `${CALENDAR_API}/calendars/primary/events/${eventId}`,
+    { method: 'PATCH', body: JSON.stringify(body) }
+  );
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Update event failed: ${res.status} ${error}`);
+  }
+
+  return parseEvent(await res.json());
+}
+
 export async function deleteEvent(eventId: string): Promise<void> {
   const res = await fetchWithAuth(
     `${CALENDAR_API}/calendars/primary/events/${eventId}`,
