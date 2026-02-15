@@ -17,6 +17,43 @@ export interface TaskAnalysis {
   category: string;
 }
 
+/**
+ * AIなしでタスクをデフォルト値で作成するフォールバック
+ */
+export function createFallbackAnalysis(input: string): TaskAnalysis {
+  const now = nowJST();
+
+  // 簡易的な時刻パース: 「9時から」「14時に」など
+  let preferredStartTime: string | null = null;
+  const timeMatch = input.match(/(午後|午前|夕方|夜)?(\d{1,2})時/);
+  if (timeMatch) {
+    let hour = parseInt(timeMatch[2], 10);
+    const prefix = timeMatch[1];
+    if (prefix === '午後' || prefix === '夕方' || prefix === '夜') {
+      if (hour < 12) hour += 12;
+    }
+    const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' });
+    preferredStartTime = `${dateStr}T${String(hour).padStart(2, '0')}:00:00+09:00`;
+  }
+
+  // 簡易カテゴリ推定
+  let category = 'その他';
+  if (/トレーニング|運動|ジム|ランニング|散歩|筋トレ|ストレッチ/.test(input)) category = '運動';
+  else if (/会議|仕事|ミーティング|打ち合わせ|資料|メール|報告/.test(input)) category = '仕事';
+  else if (/勉強|学習|読書|復習|宿題|レポート/.test(input)) category = '勉強';
+  else if (/掃除|洗濯|料理|片付け|ゴミ/.test(input)) category = '家事';
+  else if (/買い物|スーパー|コンビニ|ショッピング/.test(input)) category = '買い物';
+
+  return {
+    title: input,
+    durationMinutes: 30,
+    priority: 'medium',
+    deadline: null,
+    preferredStartTime,
+    category,
+  };
+}
+
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   const now = nowJST();
   const todayStr = formatDateFull(now);
@@ -61,11 +98,18 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
       body: JSON.stringify(body),
     });
   } catch (e: any) {
-    throw new Error('この入力はできません');
+    throw new Error('ネットワークエラー: AI分析に接続できません');
   }
 
   if (!res.ok) {
-    throw new Error('この入力はできません');
+    const status = res.status;
+    if (status === 403 || status === 401) {
+      throw new Error('APIキーエラー: AI機能が利用できません');
+    }
+    if (status === 429) {
+      throw new Error('API制限: しばらく待ってからお試しください');
+    }
+    throw new Error(`AIサーバーエラー (${status})`);
   }
 
   const data = await res.json();
@@ -73,14 +117,14 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('この入力はできません');
+    throw new Error('AI応答の解析に失敗しました');
   }
 
   let parsed: any;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error('この入力はできません');
+    throw new Error('AI応答の解析に失敗しました');
   }
   return {
     title: parsed.title || input,

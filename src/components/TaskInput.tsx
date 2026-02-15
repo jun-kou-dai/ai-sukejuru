@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { analyzeTask, TaskAnalysis } from '../services/aiService';
+import { analyzeTask, createFallbackAnalysis, TaskAnalysis } from '../services/aiService';
 import { ScheduleResult } from '../services/scheduler';
 import { useCalendar } from '../contexts/CalendarContext';
 import { useTasks, TaskItem } from '../contexts/TaskContext';
@@ -166,6 +166,35 @@ export default function TaskInput() {
     removeTask(taskId);
   };
 
+  // エラータスクをリトライ
+  const handleRetry = async (task: TaskItem) => {
+    if (busy) return;
+    updateTask(task.id, { status: 'analyzing', error: undefined });
+    setBusy(true);
+    try {
+      const analysis = await analyzeTask(task.input);
+      updateTask(task.id, { analysis, status: 'confirming' });
+    } catch (e: any) {
+      updateTask(task.id, {
+        status: 'error',
+        error: e.message || 'エラーが発生しました',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // AI失敗時にフォールバック（手動追加）
+  const handleManualAdd = (task: TaskItem) => {
+    const analysis = createFallbackAnalysis(task.input);
+    updateTask(task.id, { analysis, status: 'confirming', error: undefined });
+  };
+
+  // エラータスクを削除
+  const handleDismissError = (taskId: string) => {
+    removeTask(taskId);
+  };
+
   const handleMicPress = () => {
     if (busy) return;
     if (listening) {
@@ -210,10 +239,32 @@ export default function TaskInput() {
             </View>
           )}
           {task.status === 'error' && (
-            <View style={styles.taskStatusRowError}>
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorInputText}>「{task.input}」</Text>
               <Text style={styles.taskStatusTextError}>
                 {task.error}
               </Text>
+              <View style={styles.errorActions}>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => handleRetry(task)}
+                  disabled={busy}
+                >
+                  <Text style={styles.retryBtnText}>リトライ</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.manualBtn}
+                  onPress={() => handleManualAdd(task)}
+                >
+                  <Text style={styles.manualBtnText}>手動で追加</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.dismissBtn}
+                  onPress={() => handleDismissError(task.id)}
+                >
+                  <Text style={styles.dismissBtnText}>消す</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -319,13 +370,57 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
     fontSize: 13,
   },
-  taskStatusRowError: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    padding: 10,
+  },
+  errorInputText: {
+    color: '#555',
+    fontSize: 13,
+    marginBottom: 2,
   },
   taskStatusTextError: {
     color: '#C62828',
     fontSize: 13,
+    marginBottom: 8,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  retryBtn: {
+    backgroundColor: '#2196F3',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  retryBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  manualBtn: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  manualBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dismissBtn: {
+    backgroundColor: '#E0E0E0',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  dismissBtnText: {
+    color: '#555',
+    fontSize: 12,
+    fontWeight: '600',
   },
   voiceArea: {
     alignItems: 'center',
