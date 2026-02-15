@@ -107,20 +107,39 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
 以下のJSON形式で返してください（コードブロックなし、純粋なJSONのみ）:
 {
-  "title": "タスクの簡潔なタイトル",
+  "title": "タスクの簡潔なタイトル（時刻情報は含めない）",
   "durationMinutes": 所要時間（分・整数）,
   "priority": "high" または "medium" または "low",
-  "deadline": "締切がある場合はISO 8601形式（例: 2026-02-14T17:00:00+09:00）、なければnull",
-  "preferredStartTime": "「〜時から」のように開始時刻が指定されている場合はISO 8601形式、なければnull",
+  "deadline": "締切がある場合はISO 8601形式、なければnull",
+  "preferredStartTime": "開始時刻が指定されている場合はISO 8601形式、なければnull",
   "category": "仕事/勉強/運動/家事/買い物/その他 のいずれか"
 }
 
 重要なルール:
-- 「9時からトレーニング」→ preferredStartTime を 9:00 に設定。deadline は null。
-- 「〜時までに」→ deadline に設定。preferredStartTime は null。
-- 所要時間は常識的に推定すること（トレーニング→60分、買い物→30分、会議→60分など）。
-- priority は締切の近さやタスクの性質から推定。
-- 時刻の午前/午後の判定: 「5時」「6時」のように午前/午後の指定がない場合、1〜11の数字は午前（AM）として扱う。「午後」「夜」「夕方」と明示された場合、または「13時」以上の場合のみ午後として扱う。例: 「5時」→ 05:00、「午後5時」→ 17:00、「17時」→ 17:00。`;
+
+1. preferredStartTime（開始時刻）:
+- 「9時から〜」「14時に〜」「4時半に〜」→ preferredStartTimeを設定。
+- 「明日の4時半から」→ 明日の04:30をpreferredStartTimeに設定。
+- 「明後日9時から」→ 明後日の09:00をpreferredStartTimeに設定。
+- 日付指定がなければ今日の日付を使う。
+- 「X時半」は X:30 を意味する。
+
+2. durationMinutes（所要時間）:
+- 「4時半から6時まで」→ 開始=4:30、終了=6:00、durationMinutes=90。preferredStartTimeは4:30。
+- 「15分間ランニング」→ durationMinutes=15。
+- 「1時間勉強」→ durationMinutes=60。
+- 「〜まで」は終了時刻。開始時刻との差をdurationMinutesにする。
+- 明示的な時間指定がなければ常識的に推定（トレーニング→60分、買い物→30分、会議→60分など）。
+
+3. deadline（締切）:
+- 「〜時までに完成させる」「〜日が期限」→ deadlineを設定。
+- 「〜まで」が終了時刻の意味（「6時まで勉強」）の場合はdeadlineではなくdurationMinutesの計算に使う。
+
+4. 時刻の午前/午後:
+- 1〜11の数字は午前として扱う。「5時」→ 05:00。
+- 「午後」「夜」「夕方」が付く場合、または13以上は午後。「午後5時」→ 17:00。
+
+5. priority は締切の近さやタスクの性質から推定。`;
 
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -166,7 +185,8 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   } catch (e) {
     throw new Error('AI応答の解析に失敗しました');
   }
-  return {
+
+  const aiResult: TaskAnalysis = {
     title: parsed.title || input,
     durationMinutes: parseInt(parsed.durationMinutes, 10) || 30,
     priority: ['high', 'medium', 'low'].includes(parsed.priority) ? parsed.priority : 'medium',
@@ -174,4 +194,17 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
     preferredStartTime: parsed.preferredStartTime || null,
     category: parsed.category || 'その他',
   };
+
+  // ローカルパーサーの結果で時刻・所要時間を補正する
+  // ローカルパーサーは正規表現ベースで確実なため、AIより優先
+  const local = createFallbackAnalysis(input);
+  if (local.preferredStartTime) {
+    aiResult.preferredStartTime = local.preferredStartTime;
+  }
+  if (local.durationMinutes !== 30) {
+    // デフォルト値(30)でない = ローカルパーサーが明示的に検出した
+    aiResult.durationMinutes = local.durationMinutes;
+  }
+
+  return aiResult;
 }

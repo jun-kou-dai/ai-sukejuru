@@ -20,7 +20,7 @@ export function scheduleTask(
 ): ScheduleResult {
   const now = nowJST();
 
-  // If a preferred start time is specified (e.g., "9時から〜")
+  // If a preferred start time is specified (e.g., "9時から〜", "明日の4時半から〜")
   if (analysis.preferredStartTime) {
     const preferred = new Date(analysis.preferredStartTime);
     const end = new Date(preferred.getTime() + analysis.durationMinutes * 60000);
@@ -32,6 +32,20 @@ export function scheduleTask(
 
     if (conflicts.length === 0) {
       return { start: preferred, end, slotFound: true };
+    }
+
+    // Even with conflicts, try to find the nearest free slot on the same day
+    // starting from the preferred time (not from workStartHour)
+    const prefDateStr = preferred.toLocaleDateString('en-CA', { timeZone: TIMEZONE });
+    const prefDayEnd = new Date(`${prefDateStr}T${String(workEndHour).padStart(2, '0')}:00:00+09:00`);
+    const nearbySlots = findFreeSlots(existingEvents, preferred, prefDayEnd, analysis.durationMinutes);
+    if (nearbySlots.length > 0) {
+      const slot = nearbySlots[0];
+      return {
+        start: slot.start,
+        end: new Date(slot.start.getTime() + analysis.durationMinutes * 60000),
+        slotFound: true,
+      };
     }
   }
 
