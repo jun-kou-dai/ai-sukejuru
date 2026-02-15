@@ -1,0 +1,23 @@
+name: Auto-merge feature branch to main
+
+on:
+  push:
+    branches: ['claude/fix-expo-cache-issue-38EFM']
+
+jobs:
+  merge-to-main:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git merge origin/claude/fix-expo-cache-issue-38EFM --no-edit
+          git push origin main
