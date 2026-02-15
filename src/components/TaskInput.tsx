@@ -16,58 +16,80 @@ export default function TaskInput() {
   const [busy, setBusy] = useState(false);
   const recognitionRef = useRef<any>(null);
   const listeningRef = useRef(false);
+  const savedTextRef = useRef('');
+  const transcriptRef = useRef('');
   const { events, addEvent, refreshEvents } = useCalendar();
   const { tasks, addTask, updateTask } = useTasks();
 
-  const startListening = () => {
-    if (!SpeechRecognition) {
-      alert('このブラウザは音声入力に対応していません。Chrome を使ってください。');
-      return;
-    }
+  const updateTranscript = (text: string) => {
+    transcriptRef.current = text;
+    setTranscript(text);
+  };
 
+  const launchRecognition = () => {
     const recognition = new SpeechRecognition();
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
     recognition.continuous = true;
 
     recognition.onresult = (event: any) => {
-      let final = '';
+      let sessionFinal = '';
       let interim = '';
       for (let i = 0; i < event.results.length; i++) {
         const r = event.results[i];
         if (r.isFinal) {
-          final += r[0].transcript;
+          sessionFinal += r[0].transcript;
         } else {
           interim += r[0].transcript;
         }
       }
-      setTranscript(final + interim);
+      updateTranscript(savedTextRef.current + sessionFinal + interim);
     };
 
     recognition.onend = () => {
-      // continuous モードでもブラウザが勝手に止める場合がある
-      // listening 中なら自動で再開する（ref を使って最新の状態を参照）
-      if (recognitionRef.current && listeningRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (_) {
-          listeningRef.current = false;
-          setListening(false);
-        }
-      } else {
+      recognitionRef.current = null;
+      if (!listeningRef.current) {
         setListening(false);
+        return;
       }
+      // ブラウザが勝手に止めた場合、新しいインスタンスで再開する
+      savedTextRef.current = transcriptRef.current;
+      setTimeout(() => {
+        if (listeningRef.current) {
+          try {
+            launchRecognition();
+          } catch (_) {
+            listeningRef.current = false;
+            setListening(false);
+          }
+        }
+      }, 200);
     };
 
-    recognition.onerror = () => {
-      setListening(false);
+    recognition.onerror = (event: any) => {
+      // マイク権限拒否など致命的エラーのみ停止
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        listeningRef.current = false;
+        setListening(false);
+      }
+      // no-speech, network, aborted 等は onend に任せて自動再開
     };
 
     recognitionRef.current = recognition;
     recognition.start();
+  };
+
+  const startListening = () => {
+    if (!SpeechRecognition) {
+      alert('このブラウザは音声入力に対応していません。Chrome を使ってください。');
+      return;
+    }
+    savedTextRef.current = '';
+    transcriptRef.current = '';
     listeningRef.current = true;
     setListening(true);
     setTranscript('');
+    launchRecognition();
   };
 
   const stopListening = () => {
