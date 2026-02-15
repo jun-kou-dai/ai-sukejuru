@@ -99,7 +99,7 @@ export default function TaskInput() {
     setListening(false);
   };
 
-  // Phase 1: AI分析 → 確認画面を表示
+  // Phase 1: AI分析 → 失敗したら自動で手動モードにフォールバック
   const handleSubmit = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
@@ -120,10 +120,9 @@ export default function TaskInput() {
       const analysis = await analyzeTask(trimmed);
       updateTask(taskId, { analysis, status: 'confirming' });
     } catch (e: any) {
-      updateTask(taskId, {
-        status: 'error',
-        error: e.message || 'エラーが発生しました',
-      });
+      // AI失敗時は自動でフォールバック（エラー画面を出さない）
+      const fallback = createFallbackAnalysis(trimmed);
+      updateTask(taskId, { analysis: fallback, status: 'confirming' });
     } finally {
       setBusy(false);
     }
