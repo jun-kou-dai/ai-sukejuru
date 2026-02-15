@@ -12,7 +12,20 @@ export interface TaskAnalysis {
   category: string;
 }
 
+/** HTTPステータスに応じたユーザー向けエラーメッセージ */
+function friendlyApiError(status: number): string {
+  if (status === 400) return 'AIへのリクエストが不正です。もう一度お試しください。';
+  if (status === 403) return 'AIのAPIキーが無効です。設定を確認してください。';
+  if (status === 429) return 'AIへのリクエストが多すぎます。少し待ってからお試しください。';
+  if (status >= 500) return 'AIサービスが一時的に利用できません。しばらくしてからお試しください。';
+  return 'AI分析に失敗しました。もう一度お試しください。';
+}
+
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
+  if (!API_KEY) {
+    throw new Error('AIのAPIキーが設定されていません。');
+  }
+
   const now = nowJST();
   const todayStr = formatDateFull(now);
   const currentTime = formatTime(now);
@@ -48,31 +61,34 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
     },
   };
 
-  const res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (e: any) {
+    throw new Error('ネットワークエラーです。接続を確認してください。');
+  }
 
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Gemini API error: ${res.status} ${errorText}`);
+    throw new Error(friendlyApiError(res.status));
   }
 
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
-  // Extract JSON from response (handle possible markdown code blocks)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error(`AIからの応答をパースできませんでした: ${text.substring(0, 200)}`);
+    throw new Error('AIの応答を解析できませんでした。もう一度お試しください。');
   }
 
   let parsed: any;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error(`AIの応答JSONが不正です: ${jsonMatch[0].substring(0, 200)}`);
+    throw new Error('AIの応答を解析できませんでした。もう一度お試しください。');
   }
   return {
     title: parsed.title || input,
