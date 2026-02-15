@@ -37,7 +37,8 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 - 「9時からトレーニング」→ preferredStartTime を 9:00 に設定。deadline は null。
 - 「〜時までに」→ deadline に設定。preferredStartTime は null。
 - 所要時間は常識的に推定すること（トレーニング→60分、買い物→30分、会議→60分など）。
-- priority は締切の近さやタスクの性質から推定。`;
+- priority は締切の近さやタスクの性質から推定。
+- 時刻の午前/午後の判定: 「5時」「6時」のように午前/午後の指定がない場合、1〜11の数字は午前（AM）として扱う。「午後」「夜」「夕方」と明示された場合、または「13時」以上の場合のみ午後として扱う。例: 「5時」→ 05:00、「午後5時」→ 17:00、「17時」→ 17:00。`;
 
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
