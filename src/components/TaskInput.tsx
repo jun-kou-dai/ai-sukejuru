@@ -212,7 +212,7 @@ export default function TaskInput() {
           {task.status === 'error' && (
             <View style={styles.taskStatusRowError}>
               <Text style={styles.taskStatusTextError}>
-                「{task.input}」: {task.error}
+                {task.error}
               </Text>
             </View>
           )}
