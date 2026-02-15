@@ -23,33 +23,57 @@ export interface TaskAnalysis {
 export function createFallbackAnalysis(input: string): TaskAnalysis {
   const now = nowJST();
 
-  // 時刻パース: 「9時から」「14時45分に」「19時50分から」など
+  // 日付パース: 「明日」「明後日」
+  let dayOffset = 0;
+  if (/明後日/.test(input)) dayOffset = 2;
+  else if (/明日/.test(input)) dayOffset = 1;
+
+  // 時刻パース（統一正規表現）: 「9時」「14時45分」「4時半」にマッチ（「1時間」は除外）
+  // 入力中の最初のマッチを開始時刻とする
   let preferredStartTime: string | null = null;
-  const timeWithMin = input.match(/(午後|午前|夕方|夜)?(\d{1,2})時(\d{1,2})分(?!間)/);
-  const timeHourOnly = !timeWithMin ? input.match(/(午後|午前|夕方|夜)?(\d{1,2})時(?!間)/) : null;
-  const tm = timeWithMin || timeHourOnly;
+  const timeRe = /(午後|午前|夕方|夜)?(\d{1,2})時(?!間)((\d{1,2})分(?!間)|半)?/;
+  const tm = input.match(timeRe);
+  let startHour = 0, startMin = 0;
   if (tm) {
-    let hour = parseInt(tm[2], 10);
+    startHour = parseInt(tm[2], 10);
     const prefix = tm[1];
-    const minutes = timeWithMin ? parseInt(timeWithMin[3], 10) : 0;
+    startMin = tm[3] === '半' ? 30 : tm[4] ? parseInt(tm[4], 10) : 0;
     if (prefix === '午後' || prefix === '夕方' || prefix === '夜') {
-      if (hour < 12) hour += 12;
+      if (startHour < 12) startHour += 12;
     }
-    const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' });
-    preferredStartTime = `${dateStr}T${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+09:00`;
+    const baseDate = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+    const dateStr = baseDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' });
+    preferredStartTime = `${dateStr}T${String(startHour).padStart(2, '0')}:${String(startMin).padStart(2, '0')}:00+09:00`;
+  }
+
+  // 終了時刻パース: 「6時まで」「8時半まで」→ 開始時刻との差を所要時間にする
+  const endMatch = input.match(/(\d{1,2})時(半|(\d{1,2})分)?まで/);
+  let endMinutesOfDay: number | null = null;
+  if (endMatch) {
+    const endH = parseInt(endMatch[1], 10);
+    const endM = endMatch[2] === '半' ? 30 : endMatch[3] ? parseInt(endMatch[3], 10) : 0;
+    endMinutesOfDay = endH * 60 + endM;
   }
 
   // 所要時間パース: 「15分間」「1時間」「90分」など
-  // 時刻部分（「19時50分」）を除外してからパース
+  // 時刻部分を除外してからパース
   let durationMinutes = 30;
-  const inputWithoutTime = timeWithMin ? input.replace(timeWithMin[0], '') : input;
-  const durHourMatch = inputWithoutTime.match(/(\d+)時間/);
-  const durMinMatch = inputWithoutTime.match(/(\d+)分/);
+  const timeStr = tm ? tm[0] : '';
+  const endStr = endMatch ? endMatch[0] : '';
+  let inputClean = timeStr ? input.replace(timeStr, '') : input;
+  if (endStr) inputClean = inputClean.replace(endStr, '');
+  const durHourMatch = inputClean.match(/(\d+)時間/);
+  const durMinMatch = inputClean.match(/(\d+)分/);
   if (durHourMatch) {
     durationMinutes = parseInt(durHourMatch[1], 10) * 60;
     if (durMinMatch) durationMinutes += parseInt(durMinMatch[1], 10);
   } else if (durMinMatch) {
     durationMinutes = parseInt(durMinMatch[1], 10);
+  } else if (endMinutesOfDay !== null && tm) {
+    // 「4時半から6時まで」→ 差分を所要時間にする
+    const startMOD = startHour * 60 + startMin;
+    const diff = endMinutesOfDay - startMOD;
+    if (diff > 0) durationMinutes = diff;
   }
 
   // 簡易カテゴリ推定
