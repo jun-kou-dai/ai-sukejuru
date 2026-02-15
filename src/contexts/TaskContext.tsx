@@ -5,7 +5,7 @@ export interface TaskItem {
   id: string;
   input: string;
   analysis: TaskAnalysis | null;
-  status: 'analyzing' | 'analyzed' | 'scheduling' | 'scheduled' | 'error';
+  status: 'analyzing' | 'analyzed' | 'confirming' | 'scheduling' | 'scheduled' | 'error';
   error?: string;
   calendarEventId?: string;
   scheduledStart?: Date;

@@ -10,7 +10,7 @@
     "web": "expo start --web",
     "build": "expo export --platform web && node scripts/postbuild.js",
     "serve": "node serve.js",
-    "test": "TZ=UTC npx tsx tests/timezone.test.ts && TZ=UTC npx tsx tests/scheduler.test.ts && TZ=UTC npx tsx tests/ui-output.test.ts"
+    "test": "TZ=UTC npx tsx tests/timezone.test.ts && TZ=UTC npx tsx tests/scheduler.test.ts && TZ=UTC npx tsx tests/ui-output.test.ts && TZ=UTC npx tsx tests/confirm-flow.test.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "^6.1.2",
