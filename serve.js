@@ -107,6 +107,13 @@ const server = http.createServer((req, res) => {
 
   try {
     const data = fs.readFileSync(filePath);
+    const etag = require('crypto').createHash('md5').update(data).digest('hex');
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304);
+      res.end();
+      return;
+    }
+    res.setHeader('ETag', etag);
     res.writeHead(200, { 'Content-Type': contentType });
     res.end(data);
   } catch (e) {

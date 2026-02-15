@@ -66,11 +66,16 @@ html = html.replace(
   'JavaScriptを有効にしてください。'
 );
 
-// 6. Convert absolute paths to relative for GitHub Pages subdir deployment
+// 6. Add cache-busting version parameter to JS/CSS assets
+const buildVersion = Date.now().toString(36);
+html = html.replace(/(src="[^"]+\.js)(")/g, `$1?v=${buildVersion}$2`);
+html = html.replace(/(href="[^"]+\.css)(")/g, `$1?v=${buildVersion}$2`);
+
+// 7. Convert absolute paths to relative for GitHub Pages subdir deployment
 html = html.replace(/src="\//g, 'src="./');
 html = html.replace(/href="\//g, 'href="./');
 
-// 7. Clean up comments
+// 8. Clean up comments
 html = html.replace(/\s*<!-- The `react-native-web`.*?-->/s, '');
 html = html.replace(/\s*<!-- Use static rendering.*?-->/s, '');
 html = html.replace(/\s*<!-- The root element.*?-->/s, '');
@@ -79,7 +84,7 @@ html = html.replace(/\s*\/\* These styles.*?\*\//g, '');
 fs.writeFileSync(HTML_PATH, html);
 console.log('dist/index.html patched successfully.');
 
-// 8. Copy dist/ to docs/ for GitHub Pages
+// 9. Copy dist/ to docs/ for GitHub Pages
 function copyDirSync(src, dest) {
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
