@@ -11,6 +11,7 @@ function getGeminiUrl(): string {
 export interface TaskAnalysis {
   title: string;
   durationMinutes: number;
+  durationExplicit?: boolean; // ローカルパーサーが明示的に検出した場合 true
   priority: 'high' | 'medium' | 'low';
   deadline: string | null; // ISO string or null
   preferredStartTime: string | null; // ISO string or null - 「9時から〜」の場合
@@ -58,6 +59,7 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
   // 所要時間パース: 「15分間」「1時間」「90分」など
   // 時刻部分を除外してからパース
   let durationMinutes = 30;
+  let durationExplicit = false; // 明示的に所要時間が検出されたか
   const timeStr = tm ? tm[0] : '';
   const endStr = endMatch ? endMatch[0] : '';
   let inputClean = timeStr ? input.replace(timeStr, '') : input;
@@ -67,13 +69,15 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
   if (durHourMatch) {
     durationMinutes = parseInt(durHourMatch[1], 10) * 60;
     if (durMinMatch) durationMinutes += parseInt(durMinMatch[1], 10);
+    durationExplicit = true;
   } else if (durMinMatch) {
     durationMinutes = parseInt(durMinMatch[1], 10);
+    durationExplicit = true;
   } else if (endMinutesOfDay !== null && tm) {
     // 「4時半から6時まで」→ 差分を所要時間にする
     const startMOD = startHour * 60 + startMin;
     const diff = endMinutesOfDay - startMOD;
-    if (diff > 0) durationMinutes = diff;
+    if (diff > 0) { durationMinutes = diff; durationExplicit = true; }
   }
 
   // 簡易カテゴリ推定
@@ -87,6 +91,7 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
   return {
     title: input,
     durationMinutes,
+    durationExplicit,
     priority: 'medium',
     deadline: null,
     preferredStartTime,
@@ -201,8 +206,7 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   if (local.preferredStartTime) {
     aiResult.preferredStartTime = local.preferredStartTime;
   }
-  if (local.durationMinutes !== 30) {
-    // デフォルト値(30)でない = ローカルパーサーが明示的に検出した
+  if (local.durationExplicit) {
     aiResult.durationMinutes = local.durationMinutes;
   }
 
