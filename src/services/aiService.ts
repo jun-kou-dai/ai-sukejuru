@@ -1,7 +1,12 @@
 import { nowJST, formatDateFull, formatTime } from '../utils/timezone';
 
-const API_KEY = process.env.EXPO_PUBLIC_AI_API_KEY ?? '';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+
+/** ビルド時の定数展開による dead-code elimination を防ぐため、実行時に取得する */
+function getGeminiUrl(): string {
+  const key = process.env.EXPO_PUBLIC_AI_API_KEY ?? '';
+  return `${GEMINI_BASE}?key=${key}`;
+}
 
 export interface TaskAnalysis {
   title: string;
@@ -48,31 +53,34 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
     },
   };
 
-  const res = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(getGeminiUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (e: any) {
+    throw new Error('この入力はできません');
+  }
 
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Gemini API error: ${res.status} ${errorText}`);
+    throw new Error('この入力はできません');
   }
 
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
-  // Extract JSON from response (handle possible markdown code blocks)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error(`AIからの応答をパースできませんでした: ${text.substring(0, 200)}`);
+    throw new Error('この入力はできません');
   }
 
   let parsed: any;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error(`AIの応答JSONが不正です: ${jsonMatch[0].substring(0, 200)}`);
+    throw new Error('この入力はできません');
   }
   return {
     title: parsed.title || input,

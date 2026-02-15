@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { analyzeTask } from '../services/aiService';
-import { scheduleTask } from '../services/scheduler';
+import { analyzeTask, TaskAnalysis } from '../services/aiService';
+import { ScheduleResult } from '../services/scheduler';
 import { useCalendar } from '../contexts/CalendarContext';
 import { useTasks, TaskItem } from '../contexts/TaskContext';
 import { formatTime, formatDate } from '../utils/timezone';
+import TaskConfirmCard from './TaskConfirmCard';
 
 const SpeechRecognition = typeof window !== 'undefined'
   ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -19,7 +20,7 @@ export default function TaskInput() {
   const savedTextRef = useRef('');
   const transcriptRef = useRef('');
   const { events, addEvent, refreshEvents } = useCalendar();
-  const { tasks, addTask, updateTask } = useTasks();
+  const { tasks, addTask, updateTask, removeTask } = useTasks();
 
   const updateTranscript = (text: string) => {
     transcriptRef.current = text;
@@ -52,7 +53,6 @@ export default function TaskInput() {
         setListening(false);
         return;
       }
-      // ブラウザが勝手に止めた場合、新しいインスタンスで再開する
       savedTextRef.current = transcriptRef.current;
       setTimeout(() => {
         if (listeningRef.current) {
@@ -67,12 +67,10 @@ export default function TaskInput() {
     };
 
     recognition.onerror = (event: any) => {
-      // マイク権限拒否など致命的エラーのみ停止
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         listeningRef.current = false;
         setListening(false);
       }
-      // no-speech, network, aborted 等は onend に任せて自動再開
     };
 
     recognitionRef.current = recognition;
@@ -101,6 +99,7 @@ export default function TaskInput() {
     setListening(false);
   };
 
+  // Phase 1: AI分析 → 確認画面を表示
   const handleSubmit = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
@@ -119,28 +118,38 @@ export default function TaskInput() {
 
     try {
       const analysis = await analyzeTask(trimmed);
-      updateTask(taskId, { analysis, status: 'analyzed' });
+      updateTask(taskId, { analysis, status: 'confirming' });
+    } catch (e: any) {
+      updateTask(taskId, {
+        status: 'error',
+        error: e.message || 'エラーが発生しました',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
 
-      updateTask(taskId, { status: 'scheduling' });
-      const result = scheduleTask(analysis, events);
+  // Phase 2: ユーザーが確認 → カレンダーに登録
+  const handleConfirm = async (
+    taskId: string,
+    editedAnalysis: TaskAnalysis,
+    scheduleResult: ScheduleResult
+  ) => {
+    setBusy(true);
+    updateTask(taskId, { analysis: editedAnalysis, status: 'scheduling' });
 
-      if (!result.slotFound) {
-        updateTask(taskId, {
-          status: 'error',
-          error: '空き時間が見つかりませんでした。',
-        });
-        setBusy(false);
-        return;
-      }
-
-      const calEvent = await addEvent(analysis.title, result.start, result.end);
+    try {
+      const calEvent = await addEvent(
+        editedAnalysis.title,
+        scheduleResult.start,
+        scheduleResult.end
+      );
       updateTask(taskId, {
         status: 'scheduled',
         calendarEventId: calEvent.id,
-        scheduledStart: result.start,
-        scheduledEnd: result.end,
+        scheduledStart: scheduleResult.start,
+        scheduledEnd: scheduleResult.end,
       });
-
       await refreshEvents();
     } catch (e: any) {
       updateTask(taskId, {
@@ -152,6 +161,11 @@ export default function TaskInput() {
     }
   };
 
+  // 確認をキャンセル → タスクを削除
+  const handleCancelConfirm = (taskId: string) => {
+    removeTask(taskId);
+  };
+
   const handleMicPress = () => {
     if (busy) return;
     if (listening) {
@@ -161,6 +175,7 @@ export default function TaskInput() {
     }
   };
 
+  const confirmingTask = tasks.find(t => t.status === 'confirming');
   const unscheduledTasks = tasks.filter(t => t.status === 'error');
 
   return (
@@ -173,7 +188,7 @@ export default function TaskInput() {
         </View>
       )}
 
-      {tasks.slice(-3).reverse().map(task => (
+      {tasks.filter(t => t.status !== 'confirming').slice(-3).reverse().map(task => (
         <View key={task.id} style={styles.taskStatus}>
           {task.status === 'analyzing' && (
             <View style={styles.taskStatusRow}>
@@ -184,67 +199,81 @@ export default function TaskInput() {
           {task.status === 'scheduling' && (
             <View style={styles.taskStatusRow}>
               <ActivityIndicator size="small" color="#2196F3" />
-              <Text style={styles.taskStatusText}>空き時間を検索中...</Text>
+              <Text style={styles.taskStatusText}>カレンダーに登録中...</Text>
             </View>
           )}
           {task.status === 'scheduled' && task.scheduledStart && (
             <View style={styles.taskStatusRowSuccess}>
               <Text style={styles.taskStatusTextSuccess}>
-                ✓ 「{task.analysis?.title}」→ {formatDate(task.scheduledStart)} {formatTime(task.scheduledStart)}〜
+                「{task.analysis?.title}」→ {formatDate(task.scheduledStart)} {formatTime(task.scheduledStart)}〜
               </Text>
             </View>
           )}
           {task.status === 'error' && (
             <View style={styles.taskStatusRowError}>
               <Text style={styles.taskStatusTextError}>
-                ✗ 「{task.input}」: {task.error}
+                {task.error}
               </Text>
             </View>
           )}
         </View>
       ))}
 
-      {/* Voice input area */}
-      <View style={styles.voiceArea}>
-        {transcript ? (
-          <View style={styles.transcriptArea}>
-            <Text style={styles.transcriptText}>{transcript}</Text>
-            {!listening && (
-              <TouchableOpacity
-                style={styles.sendBtn}
-                onPress={() => handleSubmit(transcript)}
-                disabled={busy}
-              >
-                <Text style={styles.sendBtnText}>追加</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <Text style={styles.hintText}>
-            {listening ? '話してください...' : 'マイクを押して話しかけてください'}
-          </Text>
-        )}
+      {/* 確認カード: AI分析後にユーザーが内容を確認・編集 */}
+      {confirmingTask && confirmingTask.analysis && (
+        <TaskConfirmCard
+          analysis={confirmingTask.analysis}
+          events={events}
+          onConfirm={(editedAnalysis, scheduleResult) =>
+            handleConfirm(confirmingTask.id, editedAnalysis, scheduleResult)
+          }
+          onCancel={() => handleCancelConfirm(confirmingTask.id)}
+        />
+      )}
 
-        <TouchableOpacity
-          style={[
-            styles.micBtn,
-            listening && styles.micBtnActive,
-            busy && styles.micBtnDisabled,
-          ]}
-          onPress={handleMicPress}
-          disabled={busy}
-        >
-          {busy ? (
-            <ActivityIndicator size="large" color="#fff" />
+      {/* 音声入力エリア: 確認中は非表示 */}
+      {!confirmingTask && (
+        <View style={styles.voiceArea}>
+          {transcript ? (
+            <View style={styles.transcriptArea}>
+              <Text style={styles.transcriptText}>{transcript}</Text>
+              {!listening && (
+                <TouchableOpacity
+                  style={styles.sendBtn}
+                  onPress={() => handleSubmit(transcript)}
+                  disabled={busy}
+                >
+                  <Text style={styles.sendBtnText}>追加</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           ) : (
-            <Text style={styles.micIcon}>{listening ? '⏹' : '🎤'}</Text>
+            <Text style={styles.hintText}>
+              {listening ? '話してください...' : 'マイクを押して話しかけてください'}
+            </Text>
           )}
-        </TouchableOpacity>
 
-        {listening && (
-          <Text style={styles.listeningText}>聞き取り中...</Text>
-        )}
-      </View>
+          <TouchableOpacity
+            style={[
+              styles.micBtn,
+              listening && styles.micBtnActive,
+              busy && styles.micBtnDisabled,
+            ]}
+            onPress={handleMicPress}
+            disabled={busy}
+          >
+            {busy ? (
+              <ActivityIndicator size="large" color="#fff" />
+            ) : (
+              <Text style={styles.micIcon}>{listening ? '⏹' : '🎤'}</Text>
+            )}
+          </TouchableOpacity>
+
+          {listening && (
+            <Text style={styles.listeningText}>聞き取り中...</Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
