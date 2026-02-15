@@ -14,16 +14,16 @@ export interface TaskAnalysis {
 
 /** HTTPステータスに応じたユーザー向けエラーメッセージ */
 function friendlyApiError(status: number): string {
-  if (status === 400) return 'AIへのリクエストが不正です。もう一度お試しください。';
-  if (status === 403) return 'AIのAPIキーが無効です。設定を確認してください。';
-  if (status === 429) return 'AIへのリクエストが多すぎます。少し待ってからお試しください。';
-  if (status >= 500) return 'AIサービスが一時的に利用できません。しばらくしてからお試しください。';
-  return 'AI分析に失敗しました。もう一度お試しください。';
+  if (status === 400) return 'うまく伝わらなかったみたいです。もう一度話しかけてみてね';
+  if (status === 403) return 'AIの設定に問題があるみたいです。APIキーを確認してね';
+  if (status === 429) return 'ちょっと忙しいみたい。少し待ってからもう一度試してね';
+  if (status >= 500) return 'AIがお休み中みたいです。少し待ってからもう一度試してね';
+  return 'うまくいかなかったみたい。もう一度試してね';
 }
 
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   if (!API_KEY) {
-    throw new Error('AIのAPIキーが設定されていません。');
+    throw new Error('AIのAPIキーがまだ設定されていないみたいです');
   }
 
   const now = nowJST();
@@ -69,7 +69,7 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
       body: JSON.stringify(body),
     });
   } catch (e: any) {
-    throw new Error('ネットワークエラーです。接続を確認してください。');
+    throw new Error('ネットにつながらないみたいです。接続を確認してね');
   }
 
   if (!res.ok) {
@@ -81,14 +81,14 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('AIの応答を解析できませんでした。もう一度お試しください。');
+    throw new Error('AIの返事がうまく読み取れませんでした。もう一度試してね');
   }
 
   let parsed: any;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error('AIの応答を解析できませんでした。もう一度お試しください。');
+    throw new Error('AIの返事がうまく読み取れませんでした。もう一度試してね');
   }
   return {
     title: parsed.title || input,
