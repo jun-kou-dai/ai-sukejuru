@@ -23,30 +23,49 @@ export interface TaskAnalysis {
 export function createFallbackAnalysis(input: string): TaskAnalysis {
   const now = nowJST();
 
-  // 簡易的な時刻パース: 「9時から」「14時に」など
+  // 時刻パース: 「9時から」「14時45分に」「19時30分から」など
   let preferredStartTime: string | null = null;
-  const timeMatch = input.match(/(午後|午前|夕方|夜)?(\d{1,2})時/);
+  const timeMatch = input.match(/(午後|午前|夕方|夜)?(\d{1,2})時(\d{1,2}分)?/);
   if (timeMatch) {
     let hour = parseInt(timeMatch[2], 10);
     const prefix = timeMatch[1];
+    const minStr = timeMatch[3];
+    const minutes = minStr ? parseInt(minStr.replace('分', ''), 10) : 0;
     if (prefix === '午後' || prefix === '夕方' || prefix === '夜') {
       if (hour < 12) hour += 12;
     }
     const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' });
-    preferredStartTime = `${dateStr}T${String(hour).padStart(2, '0')}:00:00+09:00`;
+    preferredStartTime = `${dateStr}T${String(hour).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+09:00`;
+  }
+
+  // 所要時間パース: 「20分間」「1時間」「90分」など
+  let durationMinutes = 30;
+  const durHourMatch = input.match(/(\d+)時間/);
+  const durMinMatch = input.match(/(\d+)分(?:間|ほど|くらい)?/);
+  if (durHourMatch) {
+    durationMinutes = parseInt(durHourMatch[1], 10) * 60;
+    if (durMinMatch) durationMinutes += parseInt(durMinMatch[1], 10);
+  } else if (durMinMatch) {
+    // 「X時Y分」の「Y分」と区別: 直前に「時」がなければ所要時間
+    const fullMatch = input.match(/\d+時\d+分/);
+    if (fullMatch && fullMatch[0].includes(durMinMatch[0])) {
+      // 「19時45分」の「45分」は時刻の一部なので所要時間にしない
+    } else {
+      durationMinutes = parseInt(durMinMatch[1], 10);
+    }
   }
 
   // 簡易カテゴリ推定
   let category = 'その他';
-  if (/トレーニング|運動|ジム|ランニング|散歩|筋トレ|ストレッチ/.test(input)) category = '運動';
+  if (/トレーニング|運動|ジム|ランニング|散歩|筋トレ|ストレッチ|ヨガ/.test(input)) category = '運動';
   else if (/会議|仕事|ミーティング|打ち合わせ|資料|メール|報告/.test(input)) category = '仕事';
-  else if (/勉強|学習|読書|復習|宿題|レポート/.test(input)) category = '勉強';
-  else if (/掃除|洗濯|料理|片付け|ゴミ/.test(input)) category = '家事';
+  else if (/勉強|学習|読書|復習|宿題|レポート|コーディング/.test(input)) category = '勉強';
+  else if (/掃除|洗濯|料理|片付け|ゴミ|風呂|シャワー/.test(input)) category = '家事';
   else if (/買い物|スーパー|コンビニ|ショッピング/.test(input)) category = '買い物';
 
   return {
     title: input,
-    durationMinutes: 30,
+    durationMinutes,
     priority: 'medium',
     deadline: null,
     preferredStartTime,
