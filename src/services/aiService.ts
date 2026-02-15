@@ -12,16 +12,9 @@ export interface TaskAnalysis {
   category: string;
 }
 
-/** HTTPステータスに応じたユーザー向けエラーメッセージ */
-function friendlyApiError(status: number): string {
-  if (status === 429) return 'ちょっと忙しいみたい。少し待ってからもう一度試してね';
-  if (status >= 500) return 'ただいま混み合っています。少し待ってからもう一度試してね';
-  return '登録できませんでした。もう一度試してね';
-}
-
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   if (!API_KEY) {
-    throw new Error('登録できませんでした。もう一度試してね');
+    throw new Error('この入力はできません');
   }
 
   const now = nowJST();
@@ -67,11 +60,11 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
       body: JSON.stringify(body),
     });
   } catch (e: any) {
-    throw new Error('登録できませんでした。ネットの接続を確認してね');
+    throw new Error('この入力はできません');
   }
 
   if (!res.ok) {
-    throw new Error(friendlyApiError(res.status));
+    throw new Error('この入力はできません');
   }
 
   const data = await res.json();
@@ -79,14 +72,14 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error('登録できませんでした。もう一度試してね');
+    throw new Error('この入力はできません');
   }
 
   let parsed: any;
   try {
     parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
-    throw new Error('登録できませんでした。もう一度試してね');
+    throw new Error('この入力はできません');
   }
   return {
     title: parsed.title || input,
