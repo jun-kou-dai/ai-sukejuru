@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --clear",
+    "clean": "rm -rf .expo dist web-build node_modules/.cache",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
