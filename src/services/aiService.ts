@@ -91,9 +91,18 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
   // タイトル生成: 音声テキストからキーワードだけ抽出
   const title = extractTitle(input);
 
+  // descriptionから時刻・所要時間情報を除去して簡潔にする
+  let desc = input.trim();
+  desc = desc.replace(/(今日の?|明日の?|明後日の?)/g, '');
+  desc = desc.replace(/(午後|午前|夕方|夜|朝)/g, '');
+  desc = desc.replace(/\d{1,2}時((\d{1,2})分|半)?(ごろ|頃)?(から|に|まで|までに)?/g, '');
+  desc = desc.replace(/\d{1,2}分間?/g, '');
+  desc = desc.replace(/\d{1,2}時間/g, '');
+  desc = desc.replace(/^\s+|\s+$/g, '').replace(/\s{2,}/g, ' ');
+
   return {
     title,
-    description: input.trim(),
+    description: desc || input.trim(),
     durationMinutes,
     durationExplicit,
     deadline: null,
@@ -129,6 +138,7 @@ function extractTitle(input: string): string {
   //    長いパターンから順に。直前の助詞も一緒に除去。
   t = t.replace(/(を|に|が|は|で|と)?(行い|行な|おこない)ます/g, '|');
   t = t.replace(/(を|に|が)?(します|しました|したい(です)?|するつもり|する予定|する(?![たてな]))/g, '|');
+  t = t.replace(/(を|に|が|は|で|と)?(行う|行った)(予定|つもり|こと)?/g, '|');
   t = t.replace(/(に|へ|を)?(行きます|行きたい(です)?|行く|向かいます|向かう|出かけます|出かける)/g, '|');
   t = t.replace(/(を|が)?(やります|やりたい(です)?|やる)/g, '|');
   t = t.replace(/(を|が)?(始めます|始める|終わらせます|終わらせる|終えます|終える)/g, '|');
@@ -136,6 +146,7 @@ function extractTitle(input: string): string {
   t = t.replace(/(を)?(浴びます|浴びる|浴びて)/g, '|');
   t = t.replace(/(を)?(買います|買う|買いに)/g, '|');
   t = t.replace(/(を)?(食べます|食べる|飲みます|飲む|読みます|読む|見ます|見る|聞きます|聞く|書きます|書く|作ります|作る|洗います|洗う)/g, '|');
+  t = t.replace(/(に)?(励み|励め|頑張り|頑張れ|取り組み|努め)(ます|ました)?/g, '|');
   t = t.replace(/(ます|ました|ません)/g, '|');
   t = t.replace(/(です|でした)/g, '|');
 
@@ -164,13 +175,17 @@ function extractTitle(input: string): string {
     seg = seg.replace(/(して|って|て)$/g, '');
     seg = seg.replace(/(を|が)?(買い|売り|洗い|浴び|書き|読み|飲み|食べ|見|聞き|作り|直っ?た|行っ?た|なっ?た)$/g, '');
 
+    // 9b. 助詞+動詞語幹の残骸を除去（ます除去やて分割後に残るもの）
+    seg = seg.replace(/(を|に)(し|やり|行い|行ない|励み|励め|頑張り|取り組み|努め)$/g, '');
+    seg = seg.replace(/(をし|にし)・/g, '・');
+
     // 10. 中間の修飾節を簡略化: 「修正が直ったの確認」→「修正確認」
     seg = seg.replace(/(が|を|は).{1,6}(った|った|ている|てる|ない)の/g, '');
 
     // 11. 末尾の助詞除去
     seg = seg.replace(/(を|に|が|は|で|と|も|へ)$/g, '');
-    // 先頭のゴミ除去
-    seg = seg.replace(/^(それ|これ|あれ|ら|。|\s|、)+/g, '');
+    // 先頭のゴミ・助詞除去
+    seg = seg.replace(/^(を|に|が|は|で|と|も|へ|の|それ|これ|あれ|ら|。|\s|、)+/g, '');
 
     seg = seg.trim();
     if (seg && seg.length > 0) {
@@ -208,8 +223,8 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 重要なルール:
 
 1. title（タイトル）:
-- 名詞・名詞句のみ。動詞・文末表現は絶対に入れない。
-- 「〜します」「〜したい」「〜に行く」等は全て除去し、核となるキーワードだけ残す。
+- 名詞・名詞句のみ。動詞・文末表現・助詞は絶対に入れない。
+- 「〜します」「〜したい」「〜に行く」「〜に励む」「〜を行う予定」等は全て除去し、核となるキーワードだけ残す。
 - 複数のタスクは「/」で区切る。
 - 例:
   「バイブコーディングをします」→ 「バイブコーディング」
@@ -219,10 +234,16 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
   「瞑想をします それから着替えて職場に向かいます」→ 「瞑想 / 着替え / 出勤」
   「夕方19時からバイブコーディングかアンチグラビティの勉強」→ 「バイブコーディング / アンチグラビティ勉強」
   「今からバイブコーディングのテストをします 修正が直ったかどうかの確認をします」→ 「バイブコーディング テスト / 修正確認」
+  「ストレッチをして柔軟に励みます」→ 「ストレッチ / 柔軟体操」
+  「20時からランニングを行う予定です」→ 「ランニング」
+  「筋トレとヨガをやります」→ 「筋トレ / ヨガ」
 
 2. description（詳細）:
-- ユーザーが言った内容を自然な文にまとめる。
-- 例: 「バイブコーディング、またはアンチグラビティの勉強をする予定」
+- ユーザーが言った内容を自然で簡潔な文にまとめる。時刻や所要時間の情報は含めない。
+- 例:
+  「バイブコーディング、またはアンチグラビティの勉強をする予定」
+  「ストレッチと柔軟体操を行う」
+  「ランニングで体を動かす」
 
 3. preferredStartTime（開始時刻）:
 - 「9時から〜」「14時に〜」「4時半に〜」→ preferredStartTimeを設定。

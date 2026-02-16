@@ -121,6 +121,7 @@ export default function TaskInput() {
       updateTask(taskId, { analysis, status: 'confirming' });
     } catch (e: any) {
       // AI失敗時は自動でフォールバック（エラー画面を出さない）
+      console.warn('[AI分析失敗] フォールバックを使用:', e.message || e);
       const fallback = createFallbackAnalysis(trimmed);
       updateTask(taskId, { analysis: fallback, status: 'confirming' });
     } finally {
