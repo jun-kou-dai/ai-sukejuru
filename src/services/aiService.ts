@@ -88,23 +88,11 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
   else if (/掃除|洗濯|料理|片付け|ゴミ|風呂|シャワー/.test(input)) category = '家事';
   else if (/買い物|スーパー|コンビニ|ショッピング/.test(input)) category = '買い物';
 
-  // 簡易タイトル生成: 時刻情報・接続詞・フィラーを除去
-  let titleText = input;
-  // 時刻表現を除去: 「夕方19時から」「今日の20時45分から」「明日の」「明後日」「午後5時半に」
-  titleText = titleText.replace(/(今日の?|明日の?|明後日の?)/g, '');
-  titleText = titleText.replace(/(午後|午前|夕方|夜)?\d{1,2}時((\d{1,2})分|半)?(から|に|まで)?/g, '');
-  titleText = titleText.replace(/\d{1,2}分間?/g, '');
-  titleText = titleText.replace(/\d{1,2}時間/g, '');
-  // 接続詞・フィラーを除去
-  titleText = titleText.replace(/(それか|または|もしくは|あと|そして|それと|それから)/g, ' / ');
-  titleText = titleText.replace(/(また|えっと|えーと|まあ|ちょっと|なんか|やっぱり)/g, '');
-  titleText = titleText.replace(/^[\s、。,./・]+|[\s、。,./・]+$/g, '');
-  titleText = titleText.replace(/[\s、。,./・]{2,}/g, ' ');
-  titleText = titleText.trim();
-  if (!titleText) titleText = input.trim();
+  // タイトル生成: 音声テキストからキーワードだけ抽出
+  const title = extractTitle(input);
 
   return {
-    title: titleText,
+    title,
     description: input.trim(),
     durationMinutes,
     durationExplicit,
@@ -112,6 +100,88 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
     preferredStartTime,
     category,
   };
+}
+
+/**
+ * 音声テキストから簡潔なタイトルを抽出する
+ * 「午後は職場に行って仕事をします」→「仕事」
+ * 「瞑想をします それから着替えて職場に向かいます」→「瞑想 / 着替え・出勤」
+ */
+function extractTitle(input: string): string {
+  let t = input;
+
+  // 1. 時刻・日付表現を除去
+  t = t.replace(/(今日の?|明日の?|明後日の?|今から|今すぐ)/g, '');
+  t = t.replace(/(午後|午前|夕方|夜|朝)は?/g, '');
+  t = t.replace(/\d{1,2}時((\d{1,2})分|半)?(ごろ|頃)?(から|に|まで|までに)?/g, '');
+  t = t.replace(/\d{1,2}分間?/g, '');
+  t = t.replace(/\d{1,2}時間/g, '');
+
+  // 2. フィラー除去
+  t = t.replace(/(えっと|えーと|まあ|ちょっと|なんか|やっぱり|とりあえず|一応)/g, '');
+
+  // 3. 複合表現を先に処理（分割前に）
+  t = t.replace(/かどうかの?/g, 'の');
+  t = t.replace(/その後/g, '|');
+  t = t.replace(/、/g, '|');
+
+  // 4. 文末動詞パターンを区切り「|」に置換（文の切れ目を検出）
+  //    長いパターンから順に。直前の助詞も一緒に除去。
+  t = t.replace(/(を|に|が|は|で|と)?(行い|行な|おこない)ます/g, '|');
+  t = t.replace(/(を|に|が)?(します|しました|したい(です)?|するつもり|する予定|する(?![たてな]))/g, '|');
+  t = t.replace(/(に|へ|を)?(行きます|行きたい(です)?|行く|向かいます|向かう|出かけます|出かける)/g, '|');
+  t = t.replace(/(を|が)?(やります|やりたい(です)?|やる)/g, '|');
+  t = t.replace(/(を|が)?(始めます|始める|終わらせます|終わらせる|終えます|終える)/g, '|');
+  t = t.replace(/(を|が)?(できます|できる)/g, '|');
+  t = t.replace(/(を)?(浴びます|浴びる|浴びて)/g, '|');
+  t = t.replace(/(を)?(買います|買う|買いに)/g, '|');
+  t = t.replace(/(を)?(食べます|食べる|飲みます|飲む|読みます|読む|見ます|見る|聞きます|聞く|書きます|書く|作ります|作る|洗います|洗う)/g, '|');
+  t = t.replace(/(ます|ました|ません)/g, '|');
+  t = t.replace(/(です|でした)/g, '|');
+
+  // 5. 接続表現も区切りに（「か」は単独では危険なので「〜か〜」のパターンのみ）
+  t = t.replace(/(それか|または|もしくは)/g, '|');
+  t = t.replace(/(それから|それと|それで|そして|あと(?=\s))/g, '|');
+  // 「AかB」パターン: 前後に名詞があるときのみ
+  t = t.replace(/(?<=[\u3040-\u9fff])か(?=[\u3040-\u9fff])/g, '|');
+
+  // 6. 区切りで分割
+  const segments = t.split('|');
+
+  const keywords: string[] = [];
+  for (let seg of segments) {
+    // 空白整理
+    seg = seg.replace(/\s+/g, '').trim();
+    if (!seg) continue;
+
+    // 7. 移動表現除去: 「職場に行って」→ 後続のタスクが本題
+    seg = seg.replace(/.{1,6}(に行って|へ行って|に向かって|へ向かって)/g, '');
+
+    // 8. 中間の「〜て」接続を「・」に分割: 「着替えて職場」→「着替え・職場」
+    seg = seg.replace(/(?<=[\u3040-\u9fff]{2,})て(?=[\u3040-\u9fff]{2,})/g, '・');
+
+    // 9. 末尾の動詞語幹・て形を除去
+    seg = seg.replace(/(して|って|て)$/g, '');
+    seg = seg.replace(/(を|が)?(買い|売り|洗い|浴び|書き|読み|飲み|食べ|見|聞き|作り|直っ?た|行っ?た|なっ?た)$/g, '');
+
+    // 10. 中間の修飾節を簡略化: 「修正が直ったの確認」→「修正確認」
+    seg = seg.replace(/(が|を|は).{1,6}(った|った|ている|てる|ない)の/g, '');
+
+    // 11. 末尾の助詞除去
+    seg = seg.replace(/(を|に|が|は|で|と|も|へ)$/g, '');
+    // 先頭のゴミ除去
+    seg = seg.replace(/^(それ|これ|あれ|ら|。|\s|、)+/g, '');
+
+    seg = seg.trim();
+    if (seg && seg.length > 0) {
+      keywords.push(seg);
+    }
+  }
+
+  // 重複除去
+  const unique = [...new Set(keywords)];
+  const result = unique.join(' / ');
+  return result || input.trim();
 }
 
 export async function analyzeTask(input: string): Promise<TaskAnalysis> {
@@ -138,8 +208,17 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 重要なルール:
 
 1. title（タイトル）:
-- 時刻情報や接続詞を除いた、短く分かりやすいタスク名。
-- 例: 「夕方19時からバイブコーディングかアンチグラビティの勉強」→ 「バイブコーディング / アンチグラビティ勉強」
+- 名詞・名詞句のみ。動詞・文末表現は絶対に入れない。
+- 「〜します」「〜したい」「〜に行く」等は全て除去し、核となるキーワードだけ残す。
+- 複数のタスクは「/」で区切る。
+- 例:
+  「バイブコーディングをします」→ 「バイブコーディング」
+  「床屋に行きたい」→ 「床屋」
+  「午後は職場に行って仕事をします」→ 「仕事」
+  「勉強します」→ 「勉強」
+  「瞑想をします それから着替えて職場に向かいます」→ 「瞑想 / 着替え / 出勤」
+  「夕方19時からバイブコーディングかアンチグラビティの勉強」→ 「バイブコーディング / アンチグラビティ勉強」
+  「今からバイブコーディングのテストをします 修正が直ったかどうかの確認をします」→ 「バイブコーディング テスト / 修正確認」
 
 2. description（詳細）:
 - ユーザーが言った内容を自然な文にまとめる。
