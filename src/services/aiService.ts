@@ -10,9 +10,9 @@ function getGeminiUrl(): string {
 
 export interface TaskAnalysis {
   title: string;
+  description: string; // 元の入力内容の要約 or 生テキスト
   durationMinutes: number;
   durationExplicit?: boolean; // ローカルパーサーが明示的に検出した場合 true
-  priority: 'high' | 'medium' | 'low';
   deadline: string | null; // ISO string or null
   preferredStartTime: string | null; // ISO string or null - 「9時から〜」の場合
   category: string;
@@ -88,11 +88,26 @@ export function createFallbackAnalysis(input: string): TaskAnalysis {
   else if (/掃除|洗濯|料理|片付け|ゴミ|風呂|シャワー/.test(input)) category = '家事';
   else if (/買い物|スーパー|コンビニ|ショッピング/.test(input)) category = '買い物';
 
+  // 簡易タイトル生成: 時刻情報・接続詞・フィラーを除去
+  let titleText = input;
+  // 時刻表現を除去: 「夕方19時から」「今日の20時45分から」「明日の」「明後日」「午後5時半に」
+  titleText = titleText.replace(/(今日の?|明日の?|明後日の?)/g, '');
+  titleText = titleText.replace(/(午後|午前|夕方|夜)?\d{1,2}時((\d{1,2})分|半)?(から|に|まで)?/g, '');
+  titleText = titleText.replace(/\d{1,2}分間?/g, '');
+  titleText = titleText.replace(/\d{1,2}時間/g, '');
+  // 接続詞・フィラーを除去
+  titleText = titleText.replace(/(それか|または|もしくは|あと|そして|それと|それから)/g, ' / ');
+  titleText = titleText.replace(/(また|えっと|えーと|まあ|ちょっと|なんか|やっぱり)/g, '');
+  titleText = titleText.replace(/^[\s、。,./・]+|[\s、。,./・]+$/g, '');
+  titleText = titleText.replace(/[\s、。,./・]{2,}/g, ' ');
+  titleText = titleText.trim();
+  if (!titleText) titleText = input.trim();
+
   return {
-    title: input,
+    title: titleText,
+    description: input.trim(),
     durationMinutes,
     durationExplicit,
-    priority: 'medium',
     deadline: null,
     preferredStartTime,
     category,
@@ -113,8 +128,8 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 以下のJSON形式で返してください（コードブロックなし、純粋なJSONのみ）:
 {
   "title": "タスクの簡潔なタイトル（時刻情報は含めない）",
+  "description": "元の入力内容を自然な日本語で要約（何をするか・補足情報）",
   "durationMinutes": 所要時間（分・整数）,
-  "priority": "high" または "medium" または "low",
   "deadline": "締切がある場合はISO 8601形式、なければnull",
   "preferredStartTime": "開始時刻が指定されている場合はISO 8601形式、なければnull",
   "category": "仕事/勉強/運動/家事/買い物/その他 のいずれか"
@@ -122,29 +137,35 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
 重要なルール:
 
-1. preferredStartTime（開始時刻）:
+1. title（タイトル）:
+- 時刻情報や接続詞を除いた、短く分かりやすいタスク名。
+- 例: 「夕方19時からバイブコーディングかアンチグラビティの勉強」→ 「バイブコーディング / アンチグラビティ勉強」
+
+2. description（詳細）:
+- ユーザーが言った内容を自然な文にまとめる。
+- 例: 「バイブコーディング、またはアンチグラビティの勉強をする予定」
+
+3. preferredStartTime（開始時刻）:
 - 「9時から〜」「14時に〜」「4時半に〜」→ preferredStartTimeを設定。
 - 「明日の4時半から」→ 明日の04:30をpreferredStartTimeに設定。
 - 「明後日9時から」→ 明後日の09:00をpreferredStartTimeに設定。
 - 日付指定がなければ今日の日付を使う。
 - 「X時半」は X:30 を意味する。
 
-2. durationMinutes（所要時間）:
+4. durationMinutes（所要時間）:
 - 「4時半から6時まで」→ 開始=4:30、終了=6:00、durationMinutes=90。preferredStartTimeは4:30。
 - 「15分間ランニング」→ durationMinutes=15。
 - 「1時間勉強」→ durationMinutes=60。
 - 「〜まで」は終了時刻。開始時刻との差をdurationMinutesにする。
 - 明示的な時間指定がなければ常識的に推定（トレーニング→60分、買い物→30分、会議→60分など）。
 
-3. deadline（締切）:
+5. deadline（締切）:
 - 「〜時までに完成させる」「〜日が期限」→ deadlineを設定。
 - 「〜まで」が終了時刻の意味（「6時まで勉強」）の場合はdeadlineではなくdurationMinutesの計算に使う。
 
-4. 時刻の午前/午後:
+6. 時刻の午前/午後:
 - 1〜11の数字は午前として扱う。「5時」→ 05:00。
-- 「午後」「夜」「夕方」が付く場合、または13以上は午後。「午後5時」→ 17:00。
-
-5. priority は締切の近さやタスクの性質から推定。`;
+- 「午後」「夜」「夕方」が付く場合、または13以上は午後。「午後5時」→ 17:00。`;
 
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -193,8 +214,8 @@ export async function analyzeTask(input: string): Promise<TaskAnalysis> {
 
   const aiResult: TaskAnalysis = {
     title: parsed.title || input,
+    description: parsed.description || input,
     durationMinutes: parseInt(parsed.durationMinutes, 10) || 30,
-    priority: ['high', 'medium', 'low'].includes(parsed.priority) ? parsed.priority : 'medium',
     deadline: parsed.deadline || null,
     preferredStartTime: parsed.preferredStartTime || null,
     category: parsed.category || 'その他',

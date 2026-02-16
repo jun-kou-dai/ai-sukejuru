@@ -14,12 +14,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   'その他': '#9E9E9E',
 };
 
-const PRIORITY_CONFIG: Record<string, { color: string; label: string }> = {
-  high: { color: '#F44336', label: '高' },
-  medium: { color: '#FF9800', label: '中' },
-  low: { color: '#4CAF50', label: '低' },
-};
-
 const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
 
 interface Props {
@@ -44,7 +38,6 @@ export default function TaskConfirmCard({ analysis, events, onConfirm, onCancel 
   }, [editedAnalysis, events]);
 
   const categoryColor = CATEGORY_COLORS[analysis.category] || CATEGORY_COLORS['その他'];
-  const priorityConfig = PRIORITY_CONFIG[analysis.priority] || PRIORITY_CONFIG.medium;
   const canConfirm = preview.slotFound && title.trim().length > 0;
 
   return (
@@ -54,9 +47,6 @@ export default function TaskConfirmCard({ analysis, events, onConfirm, onCancel 
         <View style={styles.badges}>
           <View style={[styles.badge, { backgroundColor: categoryColor }]}>
             <Text style={styles.badgeText}>{analysis.category}</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: priorityConfig.color }]}>
-            <Text style={styles.badgeText}>優先度: {priorityConfig.label}</Text>
           </View>
         </View>
       </View>
@@ -68,6 +58,15 @@ export default function TaskConfirmCard({ analysis, events, onConfirm, onCancel 
         onChangeText={setTitle}
         selectTextOnFocus
       />
+
+      {analysis.description ? (
+        <>
+          <Text style={styles.label}>詳細</Text>
+          <View style={styles.descriptionBox}>
+            <Text style={styles.descriptionText}>{analysis.description}</Text>
+          </View>
+        </>
+      ) : null}
 
       <Text style={styles.label}>所要時間</Text>
       <View style={styles.durationRow}>
@@ -156,6 +155,16 @@ const styles = StyleSheet.create({
     color: '#555',
     marginBottom: 6,
     marginTop: 12,
+  },
+  descriptionBox: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 10,
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
   titleInput: {
     borderWidth: 1,

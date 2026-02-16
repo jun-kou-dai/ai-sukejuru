@@ -37,8 +37,8 @@ console.log('\n=== 1. 確認画面: タイトル編集後もスケジュール�
 {
   const analysis: TaskAnalysis = {
     title: 'トレーニング',
+    description: '朝のトレーニング',
     durationMinutes: 60,
-    priority: 'medium',
     deadline: null,
     preferredStartTime: '2026-02-14T09:00:00+09:00',
     category: '運動',
@@ -60,8 +60,8 @@ console.log('\n=== 2. 確認画面: 所要時間変更でスケジュール結�
 {
   const analysis: TaskAnalysis = {
     title: 'ミーティング',
+    description: '午前のミーティング',
     durationMinutes: 60,
-    priority: 'high',
     deadline: null,
     preferredStartTime: '2026-02-14T10:00:00+09:00',
     category: '仕事',
@@ -116,18 +116,19 @@ console.log('\n=== 3. 確認画面: 競合時に別のスロットがプレビ�
 
   const analysis: TaskAnalysis = {
     title: '作業',
+    description: '午前の作業',
     durationMinutes: 60,
-    priority: 'medium',
     deadline: null,
     preferredStartTime: '2026-02-14T10:00:00+09:00', // 競合あり
     category: '仕事',
   };
 
   const result = scheduleTask(analysis, events);
-  assert(result.slotFound, '競合でも別の空きが見つかる');
-  assert(
-    result.start.toISOString() !== new Date('2026-02-14T10:00:00+09:00').toISOString(),
-    '10:00 以外の時間に配置'
+  assert(result.slotFound, 'preferredStartTimeは常に尊重される');
+  assertEqual(
+    result.start.toISOString(),
+    new Date('2026-02-14T10:00:00+09:00').toISOString(),
+    'ユーザー指定の10:00に配置'
   );
 }
 
@@ -137,8 +138,8 @@ console.log('\n=== 4. 確認画面: 所要時間の全プリセットでプレ�
   const DURATION_PRESETS = [15, 30, 45, 60, 90, 120];
   const baseAnalysis: TaskAnalysis = {
     title: 'テスト',
+    description: 'テストタスク',
     durationMinutes: 60,
-    priority: 'low',
     deadline: null,
     preferredStartTime: '2026-02-14T08:00:00+09:00',
     category: 'その他',
@@ -185,8 +186,8 @@ console.log('\n=== 6. 確認画面: 空き時間なしの場合 slotFound=false 
 
   const analysis: TaskAnalysis = {
     title: '予定',
+    description: '予定タスク',
     durationMinutes: 60,
-    priority: 'low',
     deadline: null,
     preferredStartTime: null,
     category: 'その他',

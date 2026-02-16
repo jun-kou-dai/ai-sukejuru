@@ -75,7 +75,7 @@ console.log('\n=== 4. scheduleTask() — preferredStartTime ===');
 const analysis1: TaskAnalysis = {
   title: 'トレーニング',
   durationMinutes: 60,
-  priority: 'medium',
+  description: '朝のトレーニング',
   deadline: null,
   preferredStartTime: '2026-02-14T09:00:00+09:00',
   category: '運動',
@@ -86,14 +86,14 @@ assert(result1.slotFound, 'preferredStartTime で空きが見つかる');
 assertEqual(result1.start.toISOString(), new Date('2026-02-14T09:00:00+09:00').toISOString(), '開始時刻が 9:00 JST');
 
 // ============================================================
-console.log('\n=== 5. scheduleTask() — preferredStartTime に競合あり ===');
+console.log('\n=== 5. scheduleTask() — preferredStartTime は競合があっても尊重 ===');
 const conflictEvents: CalendarEvent[] = [
   { id: '1', summary: '既存', start: new Date('2026-02-14T09:00:00+09:00'), end: new Date('2026-02-14T10:00:00+09:00') },
 ];
 const result2 = scheduleTask(analysis1, conflictEvents);
-// 9:00 は競合 → 別の空きを探す
-assert(result2.slotFound, '競合時は別の空きを探す');
-assert(result2.start.toISOString() !== new Date('2026-02-14T09:00:00+09:00').toISOString(), '9:00以外の時間に配置');
+// ユーザー指定の時刻は常に尊重する
+assert(result2.slotFound, 'preferredStartTimeは常に尊重される');
+assertEqual(result2.start.toISOString(), new Date('2026-02-14T09:00:00+09:00').toISOString(), 'ユーザー指定の9:00に配置');
 
 // ============================================================
 console.log('\n==============================');
