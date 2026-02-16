@@ -3,6 +3,7 @@ import { TIMEZONE, isSameDay, nowJST } from './timezone';
 export interface CalendarEvent {
   id: string;
   summary: string;
+  description?: string;
   start: Date;
   end: Date;
   isAllDay?: boolean;

@@ -57,24 +57,36 @@ function parseEvent(item: any): CalendarEvent {
     end = new Date(item.end.dateTime);
   }
 
+  // description から [AI-SCHEDULED] マーカーを除去してユーザー向けテキストを抽出
+  const rawDesc: string = item.description || '';
+  const isAIScheduled = rawDesc.includes('[AI-SCHEDULED]');
+  const userDescription = rawDesc
+    .replace('[AI-SCHEDULED]', '')
+    .replace('このイベントはAIスケジューラーが自動作成しました。', '')
+    .trim() || undefined;
+
   return {
     id: item.id,
     summary: item.summary || '(無題)',
+    description: userDescription,
     start,
     end,
     isAllDay,
-    isAIScheduled: item.description?.includes('[AI-SCHEDULED]') ?? false,
+    isAIScheduled,
   };
 }
 
 export async function createEvent(
   summary: string,
   startTime: Date,
-  endTime: Date
+  endTime: Date,
+  description?: string
 ): Promise<CalendarEvent> {
+  const descParts = ['[AI-SCHEDULED]'];
+  if (description) descParts.push(description);
   const body = {
     summary,
-    description: '[AI-SCHEDULED] このイベントはAIスケジューラーが自動作成しました。',
+    description: descParts.join(' '),
     start: {
       dateTime: toISOStringJST(startTime),
       timeZone: TIMEZONE,
@@ -102,9 +114,10 @@ export async function updateEvent(
   eventId: string,
   summary: string,
   startTime: Date,
-  endTime: Date
+  endTime: Date,
+  description?: string
 ): Promise<CalendarEvent> {
-  const body = {
+  const body: any = {
     summary,
     start: {
       dateTime: toISOStringJST(startTime),
@@ -115,6 +128,11 @@ export async function updateEvent(
       timeZone: TIMEZONE,
     },
   };
+  if (description !== undefined) {
+    body.description = description.includes('[AI-SCHEDULED]')
+      ? description
+      : '[AI-SCHEDULED] ' + description;
+  }
 
   const res = await fetchWithAuth(
     `${CALENDAR_API}/calendars/primary/events/${eventId}`,

@@ -141,7 +141,8 @@ export default function TaskInput() {
       const calEvent = await addEvent(
         editedAnalysis.title,
         scheduleResult.start,
-        scheduleResult.end
+        scheduleResult.end,
+        editedAnalysis.description
       );
       updateTask(taskId, {
         status: 'scheduled',

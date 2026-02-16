@@ -20,6 +20,7 @@ export default function CalendarView() {
   const { events, loading, error, refreshEvents, removeEvent, editEvent } = useCalendar();
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [editSummary, setEditSummary] = useState('');
+  const [editDescription, setEditDescription] = useState('');
   const [editStart, setEditStart] = useState('');
   const [editEnd, setEditEnd] = useState('');
   const [saving, setSaving] = useState(false);
@@ -47,6 +48,7 @@ export default function CalendarView() {
   const handleEdit = (event: CalendarEvent) => {
     setEditingEvent(event);
     setEditSummary(event.summary);
+    setEditDescription(event.description || '');
     setEditStart(formatDateTimeLocal(event.start));
     setEditEnd(formatDateTimeLocal(event.end));
   };
@@ -59,7 +61,8 @@ export default function CalendarView() {
         editingEvent.id,
         editSummary,
         parseDateTimeLocal(editStart),
-        parseDateTimeLocal(editEnd)
+        parseDateTimeLocal(editEnd),
+        editDescription || undefined
       );
       setEditingEvent(null);
     } catch (e: any) {
@@ -161,6 +164,16 @@ export default function CalendarView() {
               style={styles.input}
               value={editSummary}
               onChangeText={setEditSummary}
+            />
+
+            <Text style={styles.inputLabel}>詳細</Text>
+            <TextInput
+              style={[styles.input, styles.descriptionInput]}
+              value={editDescription}
+              onChangeText={setEditDescription}
+              placeholder="詳細を入力（任意）"
+              multiline
+              numberOfLines={3}
             />
 
             <Text style={styles.inputLabel}>開始</Text>
@@ -290,6 +303,10 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 15,
     color: '#333',
+  },
+  descriptionInput: {
+    minHeight: 60,
+    textAlignVertical: 'top',
   },
   modalActions: {
     flexDirection: 'row',

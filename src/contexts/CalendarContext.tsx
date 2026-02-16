@@ -7,8 +7,8 @@ interface CalendarContextType {
   loading: boolean;
   error: string | null;
   refreshEvents: () => Promise<void>;
-  addEvent: (summary: string, start: Date, end: Date) => Promise<CalendarEvent>;
-  editEvent: (eventId: string, summary: string, start: Date, end: Date) => Promise<CalendarEvent>;
+  addEvent: (summary: string, start: Date, end: Date, description?: string) => Promise<CalendarEvent>;
+  editEvent: (eventId: string, summary: string, start: Date, end: Date, description?: string) => Promise<CalendarEvent>;
   removeEvent: (eventId: string) => Promise<void>;
 }
 
@@ -40,14 +40,14 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const addEvent = useCallback(async (summary: string, start: Date, end: Date) => {
-    const newEvent = await createEvent(summary, start, end);
+  const addEvent = useCallback(async (summary: string, start: Date, end: Date, description?: string) => {
+    const newEvent = await createEvent(summary, start, end, description);
     setEvents(prev => [...prev, newEvent].sort((a, b) => a.start.getTime() - b.start.getTime()));
     return newEvent;
   }, []);
 
-  const editEvent = useCallback(async (eventId: string, summary: string, start: Date, end: Date) => {
-    const updated = await updateEvent(eventId, summary, start, end);
+  const editEvent = useCallback(async (eventId: string, summary: string, start: Date, end: Date, description?: string) => {
+    const updated = await updateEvent(eventId, summary, start, end, description);
     setEvents(prev =>
       prev.map(e => e.id === eventId ? updated : e).sort((a, b) => a.start.getTime() - b.start.getTime())
     );

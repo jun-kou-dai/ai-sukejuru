@@ -50,6 +50,11 @@ export default function EventCard({ event, onEdit, onDelete }: Props) {
               </View>
             )}
           </View>
+          {event.description && (
+            <Text style={[styles.descriptionText, status === 'past' && styles.pastText]} numberOfLines={2}>
+              {event.description}
+            </Text>
+          )}
           {event.isAIScheduled && (
             <Text style={styles.aiLabel}>AI配置</Text>
           )}
@@ -156,6 +161,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#fff',
     fontWeight: '600',
+  },
+  descriptionText: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
+    lineHeight: 16,
   },
   aiLabel: {
     fontSize: 11,
